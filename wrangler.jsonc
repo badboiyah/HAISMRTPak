@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "haismrtpak",
+  "main": "cloudflare/worker.mjs",
+  "compatibility_date": "2026-09-11",
+  "workers_dev": true,
+  "build": {"command": "node tools/build_cloudflare.mjs"},
+  "assets": {
+    "directory": "./dist/cloudflare",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "haismrtpak-db",
+    "database_id": "09754d2e-5ef4-4115-a4cd-615f15905ea7",
+    "migrations_dir": "cloudflare/migrations"
+  }]
+}

@@ -23,3 +23,10 @@ artifacts/
 *.log
 .DS_Store
 Thumbs.db
+
+# Cloudflare local credentials, build output, and development databases.
+.wrangler/
+.dev.vars
+.dev.vars.*
+node_modules/
+dist/
