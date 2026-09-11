@@ -1,0 +1,25 @@
+.runtime/
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+data/
+firmware/SmartParking/config.h
+artifacts/
+
+# Local notes may contain credentials; keep only dependency lists at root.
+/*.txt
+!/requirements.txt
+!/requirements-dev.txt
+!/requirements.lock.txt
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.pem
+*.key
+*.log
+.DS_Store
+Thumbs.db

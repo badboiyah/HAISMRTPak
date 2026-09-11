@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="165" viewBox="0 0 700 165" role="img" aria-labelledby="title desc">
+  <title id="title">Bãi đỗ xe thông minh HAISMRTPak</title>
+  <desc id="desc">Bốn vị trí đỗ A1 đến A4 dưới mái che, hai xe đang đỗ, biển chỉ dẫn và thanh chắn tại lối vào.</desc>
+  <rect width="700" height="165" fill="#0d0d0d"/>
+  <defs>
+    <linearGradient id="wall" x2="0" y2="1"><stop stop-color="#26282b"/><stop offset="1" stop-color="#111315"/></linearGradient>
+    <linearGradient id="floor" x2="0" y2="1"><stop stop-color="#161d20"/><stop offset="1" stop-color="#0d0d0d"/></linearGradient>
+    <linearGradient id="glass" x2="0" y2="1"><stop stop-color="#78d9e6"/><stop offset="1" stop-color="#21444b"/></linearGradient>
+    <g id="vehicle">
+      <path d="M5 20 14 3Q16 0 22 0H52Q58 0 60 3L69 20 75 26V48H0V26Z" fill="#b7bec4" stroke="#e9eef1" stroke-width="1.2"/>
+      <path d="M17 5H57L64 20H10Z" fill="url(#glass)" stroke="#172a31"/>
+      <path d="M2 28 17 30 22 36H4ZM73 28 58 30 53 36H71Z" fill="#00dfff"/>
+      <path d="M27 34H48L51 42H24Z" fill="#14191c"/>
+      <rect x="4" y="46" width="13" height="8" rx="2" fill="#050505"/><rect x="58" y="46" width="13" height="8" rx="2" fill="#050505"/>
+      <path d="M4 43H71" stroke="#ffd600" stroke-width="2"/>
+    </g>
+  </defs>
+  <path d="M18 144 101 105H604L688 144Z" fill="url(#floor)" stroke="#364247"/>
+  <path d="M87 38 120 10H584L617 38Z" fill="#252729" stroke="#6a6a60"/>
+  <path d="M89 37H615" stroke="#ffd600" stroke-width="4"/>
+  <path d="M104 42H602V112H104Z" fill="url(#wall)"/>
+  <path d="M125 48H581" stroke="#596067"/>
+  <path d="M151 48H213M267 48H329M383 48H445M499 48H561" stroke="#e7faff" stroke-width="3"/>
+  <g fill="#131b1e" stroke="#297681" stroke-width="1">
+    <path d="M122 62H225V111H117Z"/><path d="M240 62H343V111H237Z"/>
+    <path d="M357 62H460L463 111H357Z"/><path d="M475 62H578L583 111H475Z"/>
+  </g>
+  <g font-family="Arial,sans-serif" font-size="12" font-weight="700" text-anchor="middle" fill="#ffd600">
+    <text x="174" y="60">A1</text><text x="291" y="60">A2</text><text x="409" y="60">A3</text><text x="527" y="60">A4</text>
+  </g>
+  <g fill="#00dfff" font-family="Arial,sans-serif" font-size="32" text-anchor="middle">
+    <text x="291" y="98">P</text><text x="527" y="98">P</text>
+  </g>
+  <use href="#vehicle" transform="translate(136 72) scale(.96 .76)"/>
+  <use href="#vehicle" transform="translate(371 72) scale(.96 .76)"/>
+  <g fill="#292c2e" stroke="#585a58"><path d="M98 39H107V118H98Z"/><path d="M600 39H609V118H600Z"/></g>
+  <path d="M99 49V63M608 49V63" stroke="#ffd600" stroke-width="4"/>
+  <path d="M123 113 112 130M226 113 222 130M239 113 236 130M344 113V130M357 113V130M462 113 466 130M475 113 479 130M582 113 594 130" stroke="#00dfff" stroke-width="1.5"/>
+  <path d="M43 148H651" stroke="#8b8a72" stroke-dasharray="15 12"/>
+  <path d="M270 140H317L311 135M317 140 311 145M389 140H436L430 135M436 140 430 145" fill="none" stroke="#ffd600" stroke-width="2"/>
+  <rect x="41" y="49" width="36" height="42" rx="4" fill="#141414" stroke="#ffd600" stroke-width="2"/>
+  <text x="59" y="80" font-family="Arial,sans-serif" font-size="31" text-anchor="middle" fill="#ffd600">P</text>
+  <path d="M59 93V121" stroke="#717578" stroke-width="4"/>
+  <rect x="626" y="91" width="18" height="42" rx="2" fill="#25292b" stroke="#677178"/>
+  <rect x="631" y="97" width="8" height="10" rx="1" fill="#00dfff"/>
+  <path d="M636 90 673 53" stroke="#ffd600" stroke-width="6"/>
+  <path d="M643 83 649 77M657 69 663 63" stroke="#171717" stroke-width="6"/>
+  <path d="M113 19H251M452 19H590" stroke="#7c7332"/>
+  <text x="350" y="27" fill="#f5f5f5" font-family="Arial,sans-serif" font-size="12" font-weight="700" letter-spacing="2" text-anchor="middle">HAISMRTPak</text>
+</svg>
