@@ -9,7 +9,7 @@ from functools import wraps
 from urllib.parse import urlencode
 
 from flask import jsonify, request, session, send_from_directory, redirect
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -58,7 +58,7 @@ def register_customer(app, DB, lock, State, Driver, Location, public, admin_guar
         return wrapped
 
     def user_json(user):
-        return dict(name=user.name, email=user.email)
+        return dict(name=user.name, email=user.email, username=user.username)
 
     def authenticate(user):
         session.clear()
@@ -117,18 +117,22 @@ def register_customer(app, DB, lock, State, Driver, Location, public, admin_guar
             return jsonify(error='Đã đạt giới hạn đăng ký. Vui lòng thử lại sau 1 giờ.'), 429
         data = payload()
         email, password = credentials(data)
+        username = data.get('username', '')
+        if not isinstance(username, str) or not re.fullmatch(r'[A-Za-z0-9_]{3,32}', username.strip()):
+            raise ValueError('Tên đăng nhập cần 3–32 chữ cái không dấu, chữ số hoặc dấu gạch dưới.')
+        username = username.strip().lower()
         name = data.get('name')
         if not isinstance(name, str) or not 2 <= len(name.strip()) <= 60 or any(ord(c) < 32 for c in name):
             raise ValueError('Tên cần từ 2 đến 60 ký tự.')
         hashed = generate_password_hash(password)
         try:
             with lock, DB.begin() as db:
-                user = Driver(name=name.strip(), email=email, password_hash=hashed, created_at=time.time())
+                user = Driver(name=name.strip(), email=email, username=username, password_hash=hashed, created_at=time.time())
                 db.add(user)
                 db.flush()
             return authenticate(user), 201
         except IntegrityError:
-            return jsonify(error='Địa chỉ thư điện tử này đã được đăng ký. Hãy đăng nhập.'), 409
+            return jsonify(error='Email hoặc tên đăng nhập đã được sử dụng.'), 409
 
     @app.post('/api/driver/login')
     def driver_login():
@@ -136,12 +140,16 @@ def register_customer(app, DB, lock, State, Driver, Location, public, admin_guar
             return jsonify(error='Vui lòng tải lại ứng dụng trước khi đăng nhập.'), 403
         if not limit('login', 10, 300):
             return jsonify(error='Đã thử đăng nhập nhiều lần. Vui lòng chờ 5 phút.'), 429
-        email, password = credentials(payload())
+        data = payload()
+        identifier, password = data.get('identifier', data.get('email', '')), data.get('password')
+        if not isinstance(identifier, str) or not 1 <= len(identifier.strip()) <= 254 or not isinstance(password, str) or not 1 <= len(password) <= 128:
+            return jsonify(error='Email/tên đăng nhập hoặc mật khẩu không đúng.'), 401
+        identifier = identifier.strip().lower()
         with DB() as db:
-            user = db.scalar(select(Driver).where(Driver.email == email))
+            user = db.scalar(select(Driver).where(or_(Driver.email == identifier, Driver.username == identifier)))
             valid = check_password_hash(user.password_hash if user else dummy_hash, password)
             if not user or not valid:
-                return jsonify(error='Địa chỉ thư điện tử hoặc mật khẩu không đúng.'), 401
+                return jsonify(error='Email/tên đăng nhập hoặc mật khẩu không đúng.'), 401
             return authenticate(user)
 
     @app.post('/api/driver/logout')

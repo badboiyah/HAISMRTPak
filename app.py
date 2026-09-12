@@ -13,7 +13,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, session, send_from_directory
-from sqlalchemy import create_engine, String, Integer, Float, Boolean, Text, select, func
+from sqlalchemy import create_engine, inspect, text, String, Integer, Float, Boolean, Text, select, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -65,6 +65,7 @@ class Driver(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(60))
     email: Mapped[str] = mapped_column(String(254), unique=True)
+    username: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[float] = mapped_column(Float)
 
@@ -103,6 +104,10 @@ def create_app(config=None):
     password_hash = generate_password_hash(app.config['ADMIN_PASSWORD'])
     engine = create_engine(app.config['DATABASE_URL'], pool_pre_ping=True)
     Base.metadata.create_all(engine)
+    if "username" not in {c["name"] for c in inspect(engine).get_columns("drivers")}:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE drivers ADD COLUMN username VARCHAR(32)"))
+            connection.execute(text("CREATE UNIQUE INDEX drivers_username_unique ON drivers(username)"))
     DB = sessionmaker(engine, expire_on_commit=False)
     lock = threading.RLock()
     app.extensions['parking_db'] = DB

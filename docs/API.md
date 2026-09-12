@@ -59,3 +59,10 @@ Không có lệnh: `command=null`. So sánh `expires_at` với `server_time` (kh
 ```
 
 Được gọi theo cạnh phát hiện của cảm biến cổng, `exit` cho cổng ra. Trả command đã tạo; firmware mẫu thực thi ở telemetry kế tiếp để có `server_time`. Cổng vào kiểm tra chỗ trống và chỉ một lượt vào đang chờ; cổng ra không bị chặn bởi bãi đầy. Cả hai cần telemetry gần nhất trong 15 giây. Lệnh chỉ hợp lệ 10 giây; lượt vào giữ 30 giây để tránh nhận dồn xe trước khi có tín hiệu vị trí.
+# Tài khoản người gửi xe: tên đăng nhập
+
+`POST /api/driver/register` nhận `name`, `email`, `username`, `password`. Tên đăng nhập bắt buộc gồm 3–32 chữ cái không dấu, chữ số hoặc `_`, không phân biệt hoa/thường và không được trùng. Email vẫn bắt buộc.
+
+`POST /api/driver/login` nhận `identifier` (email hoặc tên đăng nhập) và `password`. Trường `email` cũ vẫn được hỗ trợ cho ứng dụng chưa cập nhật. Khi thông tin không đúng, API trả HTTP 401 với `error`: `Email/tên đăng nhập hoặc mật khẩu không đúng.`
+
+Các yêu cầu này vẫn cần CSRF từ `GET /api/driver/session`. Tài khoản cũ có `username=null` tiếp tục đăng nhập bằng email; hệ thống không tự đoán hoặc gán tên đăng nhập cho người dùng cũ.

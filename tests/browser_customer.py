@@ -36,7 +36,7 @@ def main():
                 page.goto('http://127.0.0.1:5052/driver/')
                 expect(page.locator('#auth-submit')).to_be_enabled()
                 page.screenshot(path=str(artifacts/'driver-login.png'),full_page=True)
-                page.locator('#tab-register').click();page.locator('#name').fill('Minh Anh');page.locator('#email').fill('anh@example.com');page.locator('#password').fill('password-123');page.locator('#auth-submit').click()
+                page.locator('#tab-register').click();page.locator('#name').fill('Minh Anh');page.locator('#username').fill('minhanh');page.locator('#email').fill('anh@example.com');page.locator('#password').fill('password-123');page.locator('#auth-submit').click()
                 expect(page.locator('#home')).to_be_visible();expect(page.locator('#free-count')).to_have_text('4')
                 expect(page.locator('#lot-name')).to_have_text('Bãi xe kiểm thử')
                 expect(page.locator('#notice')).to_contain_text('mô phỏng')

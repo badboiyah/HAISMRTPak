@@ -43,7 +43,8 @@ def main():
     email = f'test-{uuid.uuid4().hex}@example.com'
     driver.csrf = driver.call('/api/driver/session')['csrf']
     driver.call('/api/driver/register', {'name': 'A', 'email': 'bad', 'password': 'short'}, expected=400)
-    result = driver.call('/api/driver/register', {'name': 'Phương Chi', 'email': email, 'password': 'test-password-123'}, expected=201)
+    username = 'user_' + uuid.uuid4().hex[:20]
+    result = driver.call('/api/driver/register', {'name': 'Phương Chi', 'username': username, 'email': email, 'password': 'test-password-123'}, expected=201)
     driver.csrf = result['csrf']
     assert result['user']['email'] == email
     driver.call('/api/state', expected=401)
@@ -98,10 +99,15 @@ def main():
     driver.call('/api/driver/parking', expected=401)
     driver.csrf = driver.call('/api/driver/session')['csrf']
     driver.call('/api/driver/login', {'email': email, 'password': 'wrong-password'}, expected=401)
-    driver.csrf = driver.call('/api/driver/login', {'email': email.upper(), 'password': 'test-password-123'})['csrf']
+    wrong = driver.call('/api/driver/login', {'identifier': username, 'password': 'wrong'}, expected=401)
+    assert wrong['error'] == 'Email/tên đăng nhập hoặc mật khẩu không đúng.'
+    driver.csrf = driver.call('/api/driver/login', {'identifier': username.upper(), 'password': 'test-password-123'})['csrf']
+    driver.call('/api/driver/logout', {})
+    driver.csrf = driver.call('/api/driver/session')['csrf']
+    driver.csrf = driver.call('/api/driver/login', {'identifier': email.upper(), 'password': 'test-password-123'})['csrf']
     assert driver.call('/api/driver/session')['user']['email'] == email
     outsider.csrf = outsider.call('/api/driver/session')['csrf']
-    outsider.call('/api/driver/register', {'name': 'Other User', 'email': email, 'password': 'test-password-123'}, expected=409)
+    outsider.call('/api/driver/register', {'name': 'Other User', 'username': 'other_' + uuid.uuid4().hex[:20], 'email': email, 'password': 'test-password-123'}, expected=409)
     for _ in range(10):
         try:
             outsider.call('/api/driver/login', {'email': 'missing@example.com', 'password': 'wrong-password'}, expected=401)

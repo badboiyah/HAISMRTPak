@@ -200,18 +200,23 @@ async function api(request, env) {
     await csrfGuard(request, session);
     const registering = path.endsWith('/register');
     await rate(request, db, registering ? 'register' : 'login', registering ? 5 : 10, registering ? 3600 : 300);
-    const {email, password} = credentials(data);
     let user;
     if (registering) {
+      const {email, password} = credentials(data);
+      if (typeof data.username !== 'string' || !/^[A-Za-z0-9_]{3,32}$/.test(data.username.trim())) reject(400, 'Tên đăng nhập cần 3–32 chữ cái không dấu, chữ số hoặc dấu gạch dưới.');
+      const username = data.username.trim().toLowerCase();
       if (typeof data.name !== 'string' || data.name.trim().length < 2 || data.name.trim().length > 60 || /[\u0000-\u001f]/.test(data.name)) reject(400, 'Tên cần từ 2 đến 60 ký tự.');
       const hash = await passwordHash(password, env.PASSWORD_PEPPER);
-      try { user = await query(db, 'INSERT INTO drivers(name,email,password_hash,created_at) VALUES(?,?,?,?) RETURNING id,name,email', data.name.trim(), email, hash, now()).first(); }
-      catch (e) { if (String(e).includes('UNIQUE constraint failed')) reject(409, 'Địa chỉ thư điện tử này đã được đăng ký. Hãy đăng nhập.'); throw e; }
+      try { user = await query(db, 'INSERT INTO drivers(name,email,username,password_hash,created_at) VALUES(?,?,?,?,?) RETURNING id,name,email,username', data.name.trim(), email, username, hash, now()).first(); }
+      catch (e) { if (String(e).includes('UNIQUE constraint failed')) reject(409, 'Email hoặc tên đăng nhập đã được sử dụng.'); throw e; }
     } else {
-      user = await query(db, 'SELECT * FROM drivers WHERE email=?', email).first();
+      const identifier = data.identifier ?? data.email, password = data.password;
+      if (typeof identifier !== 'string' || !identifier.trim() || identifier.trim().length > 254 || typeof password !== 'string' || !password || password.length > 128) reject(401, 'Email/tên đăng nhập hoặc mật khẩu không đúng.');
+      const normalized = identifier.trim().toLowerCase();
+      user = await query(db, 'SELECT * FROM drivers WHERE email=? OR username=?', normalized, normalized).first();
       const saved = user?.password_hash || `pbkdf2-sha256-peppered$100000$${'0'.repeat(64)}$${'0'.repeat(64)}`;
       const valid = await passwordValid(password, saved, env.PASSWORD_PEPPER);
-      if (!user || !valid) reject(401, 'Địa chỉ thư điện tử hoặc mật khẩu không đúng.');
+      if (!user || !valid) reject(401, 'Email/tên đăng nhập hoặc mật khẩu không đúng.');
     }
     return sessionResponse(request, db, session, 'driver', user, registering ? 201 : 200);
   }

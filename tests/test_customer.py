@@ -24,7 +24,7 @@ class CustomerTests(unittest.TestCase):
         return self.client.post('/api/driver'+path,json=data,headers={'X-CSRF-Token':self.token})
 
     def register(self):
-        response=self.post('/register',dict(name='Phương Chi',email='Driver@Example.com',password='password-123'))
+        response=self.post('/register',dict(name='Phương Chi',username='phuongchi',email='Driver@Example.com',password='password-123'))
         self.assertEqual(response.status_code,201)
         self.token=response.json['csrf']
         return response
@@ -44,6 +44,31 @@ class CustomerTests(unittest.TestCase):
         result=client.post('/api/driver/login',json={'email':'DRIVER@example.com','password':'password-123'},headers={'X-CSRF-Token':token})
         self.assertEqual(result.status_code,200)
         other.extensions['parking_engine'].dispose()
+
+    def test_username_login_and_generic_error(self):
+        self.register()
+        self.post('/logout', {})
+        self.token = self.client.get('/api/driver/session').json['csrf']
+        for identifier in ('PHUONGCHI', 'driver@example.com'):
+            result = self.post('/login', dict(identifier=identifier, password='password-123'))
+            self.assertEqual(result.status_code, 200)
+            self.token = result.json['csrf']
+            self.post('/logout', {})
+            self.token = self.client.get('/api/driver/session').json['csrf']
+        for identifier, password in [('phuongchi','wrong'), ('driver@example.com','wrong'), ('missing','password-123')]:
+            result = self.post('/login', dict(identifier=identifier, password=password))
+            self.assertEqual(result.status_code, 401)
+            self.assertEqual(result.json['error'], 'Email/tên đăng nhập hoặc mật khẩu không đúng.')
+
+    def test_username_required_and_unique(self):
+        for username in ('', 'ab', 'bad@name'):
+            result = self.post('/register', dict(name='Valid Name', username=username, email='valid@example.com', password='password-123'))
+            self.assertEqual(result.status_code, 400)
+        self.register()
+        other = self.app.test_client()
+        csrf = other.get('/api/driver/session').json['csrf']
+        result = other.post('/api/driver/register', json=dict(name='Other User', username='PHUONGCHI', email='other@example.com', password='password-123'), headers={'X-CSRF-Token':csrf})
+        self.assertEqual(result.status_code, 409)
 
     def test_roles_and_allowlist(self):
         self.register()
@@ -86,7 +111,7 @@ class CustomerTests(unittest.TestCase):
         self.register()
         self.assertEqual(self.client.post('/api/driver/logout',json={}).status_code,403)
         other=self.app.test_client();token=other.get('/api/driver/session').json['csrf']
-        result=other.post('/api/driver/register',json=dict(name='Other',email='DRIVER@example.com',password='password-123'),headers={'X-CSRF-Token':token})
+        result=other.post('/api/driver/register',json=dict(name='Other',username='otheruser',email='DRIVER@example.com',password='password-123'),headers={'X-CSRF-Token':token})
         self.assertEqual(result.status_code,409)
 
     def test_wrong_password_and_rate_limit(self):
