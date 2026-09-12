@@ -30,6 +30,18 @@ class EntryTests(unittest.TestCase):
     def confirm(self,token):
         return self.driver.post('/api/driver/entry',json={'token':token},headers={'X-CSRF-Token':'driver-csrf'})
 
+    def test_closed_barrier_renews_used_qr_once(self):
+        token=self.arrival().json['token']
+        self.assertEqual(self.confirm(token).status_code,200)
+        self.admin.post('/api/gate',json={'action':'close'},headers={'X-CSRF-Token':self.csrf})
+        status=self.kiosk.get('/api/kiosk/status').json
+        self.assertTrue(status['token'])
+        self.assertNotEqual(status['token'],token)
+        self.assertFalse(status['confirmed'])
+        self.assertEqual(self.confirm(token).status_code,409)
+        self.admin.post('/api/gate',json={'action':'close'},headers={'X-CSRF-Token':self.csrf})
+        self.assertEqual(self.kiosk.get('/api/kiosk/status').json['token'],status['token'])
+
     def test_admin_reuses_session_and_exit_qr_is_separate(self):
         self.assertEqual(self.admin.get('/api/kiosk/status').status_code,200)
         self.assertEqual(self.admin.get('/api/state').status_code,200)

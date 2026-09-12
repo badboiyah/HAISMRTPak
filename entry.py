@@ -3,6 +3,16 @@ import secrets
 import time
 
 
+def barrier_update(state, barrier):
+    if state['barrier'] == 'open' and barrier == 'closed':
+        for direction, key in [('entry', 'arrival'), ('exit', 'departure')]:
+            challenge = state.get(key)
+            if state.get(direction + '_present') and challenge and challenge.get('used_by'):
+                state[direction + '_present'] = False
+                arrival_update(state, True, direction)
+    state['barrier'] = barrier
+
+
 def arrival_update(state, present, direction="entry"):
     key = "arrival" if direction == "entry" else "departure"
     present_key = direction + "_present"

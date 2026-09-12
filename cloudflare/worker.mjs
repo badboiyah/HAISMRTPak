@@ -34,6 +34,17 @@ async function passwordValid(password, saved, pepper) {
 }
 export const initial = mode => ({mode, slots: Object.fromEntries(slots.map(s => [s, mode === 'simulation' ? false : null])),
   updated_at: null, last_seen: null, boot_id: null, sequence: -1, barrier: 'closed', beam: false, command: null, pending_until: 0, entry_present: false, arrival: null});
+function barrierUpdate(s, barrier) {
+  if(s.barrier==='open'&&barrier==='closed') {
+    for(const [direction,key] of [['entry','arrival'],['exit','departure']]) {
+      if(s[direction+'_present']&&s[key]?.used_by) {
+        s[direction+'_present']=false;
+        arrivalUpdate(s,true,direction);
+      }
+    }
+  }
+  s.barrier=barrier;
+}
 function arrivalUpdate(s, present, direction='entry') {
   const key=direction==='entry'?'arrival':'departure',pk=direction+'_present';
   if(present&&!s[pk])s[key]={token:token().slice(0,48),expires_at:now()+120,used_by:null};
@@ -104,7 +115,7 @@ function gate(writes, db, s, action, source, verified = false) {
     }
   }
   if (action === 'close' && s.beam) return 'Có vật cản tại thanh chắn; chưa thể đóng.';
-  if (s.mode === 'simulation') { s.barrier = action === 'close' ? 'closed' : 'open'; s.command = null; }
+  if (s.mode === 'simulation') { barrierUpdate(s, action === 'close' ? 'closed' : 'open'); s.command = null; }
   else s.command = {id: token().slice(0, 24), action, expires_at: now() + 10};
   if (action === 'entry') s.pending_until = now() + 30;
   event(writes, db, 'gate', {entry: 'Yêu cầu mở cổng vào', exit: 'Yêu cầu mở cổng ra', close: 'Yêu cầu đóng thanh chắn'}[action], source);
@@ -334,7 +345,8 @@ async function api(request, env) {
       if (!online(s) || s.boot_id!==data.boot_id) {arrivalUpdate(s,false);arrivalUpdate(s,false,'exit');}
       arrivalUpdate(s,data.entry_present ?? false);
       arrivalUpdate(s,data.exit_present ?? false,'exit');
-      Object.assign(s, {last_seen: now(), boot_id: data.boot_id, sequence: data.sequence, barrier: data.barrier, beam: data.beam});
+      barrierUpdate(s,data.barrier);
+      Object.assign(s, {last_seen: now(), boot_id: data.boot_id, sequence: data.sequence, beam: data.beam});
       if (s.command && (data.ack === s.command.id || s.command.expires_at < now())) {
         const ack = data.ack === s.command.id;
         event(writes, db, ack ? 'ack' : 'expired', ack ? 'Thiết bị xác nhận lệnh' : 'Lệnh hết hạn', 'device'); s.command = null;

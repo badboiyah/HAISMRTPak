@@ -16,7 +16,7 @@ from flask import Flask, jsonify, request, session, send_from_directory
 from sqlalchemy import create_engine, inspect, text, String, Integer, Float, Boolean, Text, select, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from werkzeug.security import generate_password_hash, check_password_hash
-from entry import arrival_update, kiosk_status
+from entry import arrival_update, kiosk_status, barrier_update
 
 ROOT = Path(__file__).resolve().parent
 SLOTS = ('A1', 'A2', 'A3', 'A4')
@@ -316,7 +316,7 @@ def create_app(config=None):
             return 'Có vật cản tại thanh chắn; chưa thể đóng.'
         command = dict(id=secrets.token_hex(12), action=action, expires_at=now+10)
         if s['mode'] == 'simulation':
-            s['barrier'] = 'closed' if action == 'close' else 'open'
+            barrier_update(s, 'closed' if action == 'close' else 'open')
             s['command'] = None
         else:
             s['command'] = command
@@ -446,7 +446,8 @@ def create_app(config=None):
                 arrival_update(s, False, "exit")
             arrival_update(s, data.get('entry_present', False))
             arrival_update(s, data.get('exit_present', False), 'exit')
-            s.update(last_seen=time.time(), boot_id=boot, sequence=seq, barrier=data['barrier'], beam=data['beam'])
+            barrier_update(s, data['barrier'])
+            s.update(last_seen=time.time(), boot_id=boot, sequence=seq, beam=data['beam'])
             command = s['command']
             if command and (data.get('ack') == command['id'] or command['expires_at'] < time.time()):
                 event(db, 'ack' if data.get('ack') == command['id'] else 'expired',
