@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 112" role="img" aria-label="Ô tô đang đỗ">
+<defs><linearGradient id="paint" x2="1" y2="1"><stop stop-color="#fff"/><stop offset=".5" stop-color="#d8e7ee"/><stop offset="1" stop-color="#91aab9"/></linearGradient></defs>
+<ellipse cx="32" cy="58" rx="28" ry="51" fill="#000" opacity=".2"/>
+<g fill="#161c24"><rect x="6" y="22" width="8" height="20" rx="3"/><rect x="50" y="22" width="8" height="20" rx="3"/><rect x="6" y="78" width="8" height="20" rx="3"/><rect x="50" y="78" width="8" height="20" rx="3"/></g>
+<path d="M13 18Q15 5 32 5T51 18L54 88Q54 104 44 107H20Q10 104 10 88Z" fill="url(#paint)" stroke="#607988" stroke-width="2"/>
+<path d="M17 33Q32 26 47 33L44 48H20Z" fill="#102d3d" stroke="#00e0ff"/><path d="M20 72H44L47 90Q32 96 17 90Z" fill="#102d3d"/>
+<path d="M12 39L18 50V73L12 83Z M52 39L46 50V73L52 83Z" fill="#244354"/>
+<rect x="20" y="49" width="24" height="24" rx="5" fill="#f0f6fa" stroke="#9cb4c0"/>
+<path d="M17 13L24 11M40 11L47 13" stroke="#ffd600" stroke-width="4" stroke-linecap="round"/>
+<path d="M15 99L23 101M41 101L49 99" stroke="#ed5656" stroke-width="4" stroke-linecap="round"/>
+<path d="M7 42L13 40M51 40L57 42" stroke="#d1e2ea" stroke-width="5" stroke-linecap="round"/>
+</svg>

@@ -80,11 +80,26 @@ def main():
     assert driver.call('/api/driver/parking')['unknown'] == 4
     admin.call('/api/gate', {'action': 'entry'}, expected=409)
     device = {'X-Device-Key': 'local-cloudflare-test-device'}
-    telemetry = dict(boot_id='test-boot', sequence=1, slots={s: False for s in ('A1','A2','A3','A4')}, barrier='closed', beam=False)
+    telemetry = dict(boot_id='test-boot', sequence=1, slots={s: False for s in ('A1','A2','A3','A4')}, barrier='closed', beam=False, entry_present=True)
     outsider.call('/api/device/telemetry', telemetry, expected=401)
     outsider.call('/api/device/telemetry', telemetry, headers=device)
     outsider.call('/api/device/telemetry', telemetry, expected=409, headers=device)
-    command = admin.call('/api/gate', {'action': 'entry'})['command']
+    kiosk = Client()
+    kiosk.csrf = kiosk.call('/api/login', {'password': 'local-cloudflare-test-password'})['csrf']
+    kiosk.csrf = kiosk.call('/api/kiosk/pair', {})['csrf']
+    qr = kiosk.call('/api/kiosk/status')['token']
+    def confirm_once(_):
+        request=urllib.request.Request(BASE+'/api/driver/entry',data=json.dumps({'token':qr}).encode(),headers={'Content-Type':'application/json','X-CSRF-Token':driver.csrf})
+        try:
+            response=driver.opener.open(request,timeout=20)
+        except urllib.error.HTTPError as exc:
+            response=exc
+        with response:
+            return response.status
+    with concurrent.futures.ThreadPoolExecutor(2) as pool:
+        assert sorted(pool.map(confirm_once,range(2))) == [200,409]
+    driver.call('/api/driver/entry', {'token': qr}, expected=409)
+    command = admin.call('/api/state')['command']
     admin.call('/api/gate', {'action': 'entry'}, expected=409)
     outsider.call('/api/device/telemetry', {**telemetry, 'sequence': 2, 'ack': command['id'], 'barrier': 'open', 'beam': True}, headers=device)
     admin.call('/api/gate', {'action': 'close'}, expected=409)

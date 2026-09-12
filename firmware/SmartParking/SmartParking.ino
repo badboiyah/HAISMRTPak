@@ -91,6 +91,7 @@ void telemetry() {
   data["boot_id"]=bootId;data["sequence"]=sequence++;
   for(int i=0;i<4;i++){ if(stable[i]<0) data["slots"][SLOT_NAMES[i]]=nullptr;else data["slots"][SLOT_NAMES[i]]=stable[i]==1; }
   data["barrier"]=gateOpen?"open":"closed";data["beam"]=beamBlocked();
+  data["entry_present"]=lastEntry;
   if(acknowledged.length()) data["ack"]=acknowledged;
   if(post("/api/device/telemetry",data,result)) applyCommand(result["command"],result["server_time"].as<double>());
 }
@@ -122,10 +123,12 @@ void setup() {
 }
 void loop() {
   safetyLoop();
+  // Entry detection only announces the car. The driver's QR confirmation
+  // creates the entry command, which arrives in the telemetry response.
+  debouncedRequest(ENTRY_IR,entrySince,lastEntry);
   if(millis()-lastSample>=250){lastSample=millis();sampleSlots();updateDisplay();}
   if(WiFi.status()!=WL_CONNECTED && millis()-lastWifi>=10000){lastWifi=millis();WiFi.reconnect();}
   if(millis()-lastSend>=2000){lastSend=millis();telemetry();}
-  if(debouncedRequest(ENTRY_IR,entrySince,lastEntry)) requestGate("entry");
   if(debouncedRequest(EXIT_IR,exitSince,lastExit)) requestGate("exit");
   delay(5);
 }

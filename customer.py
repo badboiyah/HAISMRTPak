@@ -1,4 +1,4 @@
-"""Driver accounts and read-only parking API, separate from administrator routes."""
+"""Driver accounts, parking availability and authenticated QR entry confirmation."""
 import hmac
 import json
 import math
@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
-def register_customer(app, DB, lock, State, Driver, Location, public, admin_guard):
+def register_customer(app, DB, lock, State, Driver, Location, public, admin_guard, confirm_entry):
     with DB.begin() as db:
         if not db.get(Location, 1):
             db.add(Location(id=1, payload=json.dumps(dict(name='Bãi xe HAISMRTPak', address='',
@@ -157,6 +157,11 @@ def register_customer(app, DB, lock, State, Driver, Location, public, admin_guar
     def driver_logout():
         session.clear()
         return jsonify(ok=True)
+
+    @app.post('/api/driver/entry')
+    @driver_guard
+    def driver_entry():
+        return confirm_entry(payload(), session['driver_id'])
 
     @app.get('/api/driver/parking')
     @driver_guard

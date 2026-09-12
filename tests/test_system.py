@@ -5,7 +5,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from sqlalchemy import select
-from app import create_app, State, Visit
+from app import create_app, State, Visit, Driver
 
 
 class ParkingTests(unittest.TestCase):
@@ -17,6 +17,14 @@ class ParkingTests(unittest.TestCase):
         self.client = self.app.test_client()
         self.csrf = self.client.post('/api/login', json={'password':'test-password'}).json['csrf']
         self.device_headers = {'X-Device-Key':'test-device-key'}
+        with self.app.extensions['parking_db'].begin() as db:
+            db.add(Driver(id=1,name='Entry Test',email='entry@example.com',username='entry_test',password_hash='unused-fixture',created_at=time.time()))
+        self.driver=self.app.test_client()
+        with self.driver.session_transaction() as session:
+            session.update(driver_id=1,driver_csrf='driver-test-csrf')
+        self.kiosk=self.app.test_client()
+        with self.kiosk.session_transaction() as session:
+            session.update(kiosk=True,csrf='kiosk-test-csrf')
 
     def tearDown(self):
         self.app.extensions['parking_engine'].dispose()
@@ -28,8 +36,17 @@ class ParkingTests(unittest.TestCase):
     def hardware(self):
         self.assertEqual(self.post('/mode', {'mode':'hardware'}).status_code, 200)
 
+    def enter(self):
+        with self.app.extensions['parking_db']() as db:
+            state=json.loads(db.get(State,1).payload)
+        if state['mode']=='simulation':
+            for present in (False,True):
+                self.kiosk.post('/api/kiosk/arrival',json={'present':present},headers={'X-CSRF-Token':'kiosk-test-csrf'})
+        token=self.kiosk.get('/api/kiosk/status').json['token'] or '0'*48
+        return self.driver.post('/api/driver/entry',json={'token':token},headers={'X-CSRF-Token':'driver-test-csrf'})
+
     def telemetry(self, seq=1, **changes):
-        data=dict(boot_id='boot-test', sequence=seq, slots={s:False for s in ('A1','A2','A3','A4')},barrier='closed',beam=False)
+        data=dict(boot_id='boot-test', sequence=seq, slots={s:False for s in ('A1','A2','A3','A4')},barrier='closed',beam=False,entry_present=True)
         data.update(changes)
         return self.client.post('/api/device/telemetry',json=data,headers=self.device_headers)
 
@@ -54,7 +71,7 @@ class ParkingTests(unittest.TestCase):
     def test_full_denies_entry_and_allows_exit(self):
         for slot in ('A1','A2','A3','A4'):
             self.assertEqual(self.post('/simulation',dict(slot=slot,occupied=True)).status_code,200)
-        self.assertEqual(self.post('/gate',{'action':'entry'}).status_code,409)
+        self.assertEqual(self.enter().status_code,409)
         self.assertEqual(self.post('/gate',{'action':'exit'}).status_code,200)
         self.assertEqual(self.client.get('/api/state').json['barrier'],'open')
 
@@ -79,9 +96,9 @@ class ParkingTests(unittest.TestCase):
 
     def test_unknown_and_offline_block_entry(self):
         self.hardware()
-        self.assertEqual(self.post('/gate',{'action':'entry'}).status_code,409)
+        self.assertEqual(self.enter().status_code,409)
         self.telemetry(slots={'A1':None,'A2':False,'A3':False,'A4':False})
-        self.assertEqual(self.post('/gate',{'action':'entry'}).status_code,409)
+        self.assertEqual(self.enter().status_code,409)
         self.telemetry(2)
         with self.app.extensions['parking_db'].begin() as db:
             row=db.get(State,1);s=json.loads(row.payload);s['last_seen']=time.time()-20;row.payload=json.dumps(s)
@@ -101,11 +118,12 @@ class ParkingTests(unittest.TestCase):
 
     def test_command_ack_and_obstruction(self):
         self.hardware();self.telemetry()
-        request=self.post('/gate',{'action':'entry'})
+        request=self.enter()
         self.assertEqual(request.status_code,200)
-        self.assertEqual(request.json['barrier'],'closed')
-        command=request.json['command']
-        self.assertEqual(self.post('/gate',{'action':'entry'}).status_code,409)
+        state=self.client.get('/api/state').json
+        self.assertEqual(state['barrier'],'closed')
+        command=state['command']
+        self.assertEqual(self.enter().status_code,409)
         response=self.telemetry(2,barrier='open',beam=True,ack=command['id'])
         self.assertIsNone(response.json['command'])
         self.assertEqual(self.post('/gate',{'action':'close'}).status_code,409)
@@ -127,17 +145,20 @@ class ParkingTests(unittest.TestCase):
         self.assertEqual(self.post('/mode',{'mode':'hardware'}).status_code,409)
 
     def test_entry_reservation_prevents_double_admission(self):
-        self.assertEqual(self.post('/gate',{'action':'entry'}).status_code,200)
+        self.assertEqual(self.enter().status_code,200)
         self.post('/gate',{'action':'close'})
-        self.assertEqual(self.post('/gate',{'action':'entry'}).status_code,409)
+        self.assertEqual(self.enter().status_code,409)
         self.post('/simulation',dict(slot='A1',occupied=True))
-        self.assertEqual(self.post('/gate',{'action':'entry'}).status_code,200)
+        self.assertEqual(self.enter().status_code,200)
 
     def test_concurrent_entry_only_one_accepted(self):
+        self.kiosk.post('/api/kiosk/arrival',json={'present':True},headers={'X-CSRF-Token':'kiosk-test-csrf'})
+        qr=self.kiosk.get('/api/kiosk/status').json['token']
         def enter(_):
             client=self.app.test_client()
-            token=client.post('/api/login',json={'password':'test-password'}).json['csrf']
-            return client.post('/api/gate',json={'action':'entry'},headers={'X-CSRF-Token':token}).status_code
+            with client.session_transaction() as session:
+                session.update(driver_id=1,driver_csrf='driver-test-csrf')
+            return client.post('/api/driver/entry',json={'token':qr},headers={'X-CSRF-Token':'driver-test-csrf'}).status_code
         with ThreadPoolExecutor(max_workers=2) as pool:
             result=list(pool.map(enter,range(2)))
         self.assertEqual(sorted(result),[200,409])

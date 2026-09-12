@@ -16,6 +16,7 @@ from flask import Flask, jsonify, request, session, send_from_directory
 from sqlalchemy import create_engine, inspect, text, String, Integer, Float, Boolean, Text, select, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from werkzeug.security import generate_password_hash, check_password_hash
+from entry import arrival_update, kiosk_status
 
 ROOT = Path(__file__).resolve().parent
 SLOTS = ('A1', 'A2', 'A3', 'A4')
@@ -117,7 +118,7 @@ def create_app(config=None):
     def initial():
         return dict(mode=app.config['PARKING_MODE'], slots={s: False if app.config['PARKING_MODE'] == 'simulation' else None for s in SLOTS},
                     updated_at=None, last_seen=None, boot_id=None, sequence=-1,
-                    barrier='closed', beam=False, command=None, pending_until=0)
+                    barrier='closed', beam=False, command=None, pending_until=0, entry_present=False, arrival=None)
 
     with DB.begin() as db:
         if not db.get(State, 1):
@@ -293,10 +294,12 @@ def create_app(config=None):
                 save(row, s)
             return jsonify(public(s))
 
-    def gate_request(db, s, action, source):
+    def gate_request(db, s, action, source, verified=False):
         now = time.time()
         if action not in ('entry', 'exit', 'close'):
             raise ValueError('Lệnh điều khiển phải là mở cổng vào, mở cổng ra hoặc đóng thanh chắn.')
+        if action == 'entry' and not verified:
+            return 'Người gửi xe cần quét QR tại cổng và đăng nhập để xác nhận vào bãi.'
         if not online(s):
             return 'ESP32 mất kết nối; không thể điều khiển từ xa.'
         if s['command'] and s['command']['expires_at'] > now:
@@ -332,6 +335,83 @@ def create_app(config=None):
             save(row, s)
             return (jsonify(error=error), 409) if error else jsonify(public(s))
 
+    @app.get('/kiosk/')
+    def kiosk_page():
+        return send_from_directory(app.static_folder, 'kiosk/index.html')
+
+    @app.post('/api/kiosk/pair')
+    @guard
+    def kiosk_pair():
+        session.clear()
+        session.permanent = True
+        session.update(kiosk=True, csrf=secrets.token_urlsafe(24))
+        return jsonify(csrf=session['csrf'])
+
+    def kiosk_guard(fn):
+        @wraps(fn)
+        def wrapped(*args, **kwargs):
+            if not session.get('kiosk'):
+                return jsonify(error='Vui lòng kết nối máy tính bảng với bãi xe.'), 401
+            if request.method != 'GET' and not hmac.compare_digest(request.headers.get('X-CSRF-Token', ''), session.get('csrf', '!')):
+                return jsonify(error='Phiên không hợp lệ.'), 403
+            return fn(*args, **kwargs)
+        return wrapped
+
+    @app.get('/api/kiosk/status')
+    @kiosk_guard
+    def kiosk_state():
+        with lock, DB.begin() as db:
+            _, s = read_state(db)
+            return jsonify(**kiosk_status(s, online(s)), csrf=session['csrf'])
+
+    @app.post('/api/kiosk/arrival')
+    @kiosk_guard
+    def simulate_arrival():
+        present = body().get('present')
+        if type(present) is not bool:
+            raise ValueError('Trạng thái xe đến không hợp lệ.')
+        with lock, DB.begin() as db:
+            row, s = read_state(db)
+            if s['mode'] != 'simulation':
+                return jsonify(error='Chỉ cảm biến ESP32 được báo xe đến trong chế độ phần cứng.'), 409
+            arrival_update(s, present)
+            save(row, s)
+            return jsonify(kiosk_status(s, online(s)))
+
+    @app.post('/api/kiosk/refresh')
+    @kiosk_guard
+    def refresh_arrival():
+        with lock, DB.begin() as db:
+            row, s = read_state(db)
+            arrival = s.get('arrival')
+            if not online(s) or not s.get('entry_present') or not arrival or arrival['used_by']:
+                return jsonify(error='Không có lượt xe đang chờ xác nhận.'), 409
+            if arrival['expires_at'] <= time.time():
+                s['entry_present'] = False
+                arrival_update(s, True)
+                save(row, s)
+            return jsonify(kiosk_status(s, online(s)))
+
+    def confirm_entry(data, driver_id):
+        token = data.get('token')
+        if not isinstance(token, str) or len(token) != 48 or any(c not in '0123456789abcdef' for c in token):
+            return jsonify(error='Mã QR không hợp lệ. Vui lòng quét mã tại cổng.'), 400
+        with lock, DB.begin() as db:
+            row, s = read_state(db)
+            arrival = s.get('arrival')
+            if not online(s) or not s.get('entry_present') or not arrival or arrival['used_by'] or arrival['expires_at'] <= time.time() or not hmac.compare_digest(token, arrival['token']):
+                return jsonify(error='Mã QR đã hết hạn, đã dùng hoặc xe đã rời cổng. Vui lòng quét lại.'), 409
+            if not db.get(Driver, driver_id):
+                return jsonify(error='Vui lòng đăng nhập tài khoản người gửi xe.'), 401
+            error = gate_request(db, s, 'entry', 'admin', verified=True)
+            if not error:
+                arrival['used_by'] = driver_id
+                event(db, 'gate', f'Tài khoản #{driver_id} xác nhận vào bãi bằng QR.', 'admin')
+            save(row, s)
+            if error:
+                return jsonify(error=error), 409
+            return jsonify(ok=True, mode=s['mode'], message='Đã mở thanh chắn mô phỏng.' if s['mode']=='simulation' else 'Đã xác nhận. Đang chờ ESP32 mở thanh chắn.')
+
     @app.post('/api/device/telemetry')
     @device_guard
     def telemetry():
@@ -344,6 +424,8 @@ def create_app(config=None):
             raise ValueError('Số thứ tự gói tin hoặc mã phiên khởi động không hợp lệ.')
         if data.get('barrier') not in ('open', 'closed') or type(data.get('beam')) is not bool:
             raise ValueError('Cần trạng thái thanh chắn và cảm biến vật cản hợp lệ.')
+        if type(data.get('entry_present', False)) is not bool:
+            raise ValueError('Trạng thái cảm biến xe đến không hợp lệ.')
         with lock, DB.begin() as db:
             row, s = read_state(db)
             if s['mode'] != 'hardware':
@@ -351,6 +433,9 @@ def create_app(config=None):
             if s['boot_id'] == boot and seq <= s['sequence']:
                 return jsonify(error='Gói tin trùng hoặc sai thứ tự.'), 409
             change_slots(db, s, slots, 'device')
+            if not online(s) or s['boot_id'] != boot:
+                arrival_update(s, False)
+            arrival_update(s, data.get('entry_present', False))
             s.update(last_seen=time.time(), boot_id=boot, sequence=seq, barrier=data['barrier'], beam=data['beam'])
             command = s['command']
             if command and (data.get('ack') == command['id'] or command['expires_at'] < time.time()):
@@ -424,7 +509,7 @@ def create_app(config=None):
         return jsonify(days=days, average_minutes=round((avg or 0)/60, 1))
 
     from customer import register_customer
-    register_customer(app, DB, lock, State, Driver, ParkingLocation, public, guard)
+    register_customer(app, DB, lock, State, Driver, ParkingLocation, public, guard, confirm_entry)
     return app
 
 
