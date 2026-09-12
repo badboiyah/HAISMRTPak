@@ -2,7 +2,7 @@
 
 ## Sử dụng
 
-1. Đặt máy tính bảng ở cổng, mở `https://haismrtpak.haismrtpak-haitran.workers.dev/qr/`.
+1. Đặt máy tính bảng ở cổng, mở `https://app.haismrtpak-haitran.workers.dev/qr/`.
 2. Chủ bãi nhập mật khẩu quản trị để kết nối máy tính bảng. Sau khi kết nối, phiên này chỉ được xem màn hình cổng, không có quyền quản trị. Phiên có hiệu lực 8 giờ; hết phiên cần kết nối lại.
 3. Trong chế độ phần cứng, cảm biến ENTRY_IR của ESP32 báo `entry_present=true` khi xe đứng trước cổng. Máy tính bảng tự hiện QR trong chu kỳ cập nhật 2 giây.
 4. Người gửi xe mở app, nhấn **Quét QR vào bãi** và cấp quyền camera để quét mã trên máy tính bảng (hoặc dùng camera điện thoại quét trực tiếp). Trang điện thoại yêu cầu đăng nhập hoặc tạo tài khoản, rồi nhấn **Xác nhận vào bãi**. Camera dừng khi đóng khung quét, chuyển ứng dụng hoặc đọc được mã hợp lệ; hình ảnh được xử lý trên điện thoại.

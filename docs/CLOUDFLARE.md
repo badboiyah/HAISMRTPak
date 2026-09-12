@@ -1,6 +1,6 @@
 # Chạy HAISMRTPak trên Cloudflare
 
-Địa chỉ bản triển khai: https://haismrtpak.haismrtpak-haitran.workers.dev/ ; ứng dụng người gửi xe: https://haismrtpak.haismrtpak-haitran.workers.dev/driver/ .
+Địa chỉ bản triển khai: https://app.haismrtpak-haitran.workers.dev/ ; ứng dụng người gửi xe: https://app.haismrtpak-haitran.workers.dev/driver/ .
 
 Bản Cloudflare sử dụng `cloudflare/worker.mjs` và D1. Giao diện quản trị, ứng dụng người gửi xe và đường dẫn API giống bản Flask. `app.py` vẫn chạy trên máy tính bằng các tệp `start*.bat` như trước.
 

@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "haismrtpak",
+  "name": "app",
   "main": "cloudflare/worker.mjs",
   "compatibility_date": "2026-09-11",
   "workers_dev": true,
