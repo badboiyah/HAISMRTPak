@@ -335,7 +335,7 @@ def create_app(config=None):
             save(row, s)
             return (jsonify(error=error), 409) if error else jsonify(public(s))
 
-    @app.get('/kiosk/')
+    @app.get('/qr/')
     def kiosk_page():
         return send_from_directory(app.static_folder, 'kiosk/index.html')
 

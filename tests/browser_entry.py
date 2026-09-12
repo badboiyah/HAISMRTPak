@@ -10,7 +10,7 @@ def main():
         browser=p.chromium.launch(channel='chrome',headless=True)
         try:
             kiosk=browser.new_page(viewport={'width':1024,'height':1366})
-            kiosk.goto(base+'/kiosk/')
+            kiosk.goto(base+'/qr/')
             kiosk.locator('#password').fill('local-cloudflare-test-password')
             kiosk.locator('#pair-form button').click()
             expect(kiosk.locator('#display')).to_be_visible()

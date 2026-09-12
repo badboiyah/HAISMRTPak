@@ -9,5 +9,5 @@ cpSync(resolve(root, 'static'), resolve(out, 'static'), {recursive: true});
 cpSync(resolve(root, 'static/index.html'), resolve(out, 'index.html'));
 cpSync(resolve(root, 'static/driver/index.html'), resolve(out, 'driver/index.html'));
 cpSync(resolve(root, 'static/driver/sw.js'), resolve(out, 'driver/sw.js'));
-cpSync(resolve(root, 'static/kiosk'), resolve(out, 'kiosk'), {recursive: true});
+cpSync(resolve(root, 'static/kiosk'), resolve(out, 'qr'), {recursive: true});
 console.log('Built Cloudflare public assets in dist/cloudflare');
