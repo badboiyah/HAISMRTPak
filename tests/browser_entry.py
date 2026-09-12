@@ -42,7 +42,7 @@ def main():
             driver.locator('#auth-submit').click()
             expect(driver.locator('#entry-panel')).to_be_visible()
             driver.locator('#confirm-entry').click()
-            expect(driver.locator('#entry-result')).to_have_text('Đã mở thanh chắn mô phỏng.')
+            expect(driver.locator('#entry-result')).to_have_text('Đã xác nhận tài khoản cho lượt vào bãi. Vui lòng chờ thanh chắn mở trước khi di chuyển.')
             expect(kiosk.locator('#title')).to_have_text('Mời bạn vào bãi',timeout=10000)
             expect(kiosk.locator('#qr')).to_be_hidden()
             admin=browser.new_page();admin.goto(base+'/')

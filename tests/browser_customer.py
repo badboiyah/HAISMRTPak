@@ -39,7 +39,7 @@ def main():
                 page.locator('#tab-register').click();page.locator('#name').fill('Minh Anh');page.locator('#username').fill('minhanh');page.locator('#email').fill('anh@example.com');page.locator('#password').fill('password-123');page.locator('#auth-submit').click()
                 expect(page.locator('#home')).to_be_visible();expect(page.locator('#free-count')).to_have_text('4')
                 expect(page.locator('#lot-name')).to_have_text('Bãi xe kiểm thử')
-                expect(page.locator('#notice')).to_contain_text('mô phỏng')
+                expect(page.locator('#notice')).to_contain_text('tự cập nhật')
                 expect(page.locator('#directions')).to_have_attribute('href','https://www.google.com/maps/dir/?api=1&destination=10.77%2C106.69&travelmode=driving')
                 page.locator('[data-slot="A2"]').click();expect(page.locator('#slot-detail')).to_contain_text('A2: đang trống')
                 admin.locator('.nav-item[data-view="overview"]').click()
