@@ -3,18 +3,22 @@ import secrets
 import time
 
 
-def arrival_update(state, present):
-    if present and not state.get('entry_present', False):
-        state['arrival'] = dict(token=secrets.token_hex(24), expires_at=time.time()+120, used_by=None)
+def arrival_update(state, present, direction="entry"):
+    key = "arrival" if direction == "entry" else "departure"
+    present_key = direction + "_present"
+    if present and not state.get(present_key, False):
+        state[key] = dict(token=secrets.token_hex(24), expires_at=time.time()+120, used_by=None)
     if not present:
-        state['arrival'] = None
-    state['entry_present'] = present
+        state[key] = None
+    state[present_key] = present
 
 
-def kiosk_status(state, online):
-    arrival = state.get('arrival')
-    ready = online and state.get('entry_present', False)
-    return dict(mode=state['mode'], online=online, present=bool(ready),
+def kiosk_status(state, online, direction="entry"):
+    key = "arrival" if direction == "entry" else "departure"
+    present_key = direction + "_present"
+    arrival = state.get(key)
+    ready = online and state.get(present_key, False)
+    return dict(direction=direction, mode=state['mode'], online=online, present=bool(ready),
                 token=arrival['token'] if ready and arrival and not arrival['used_by'] and arrival['expires_at'] > time.time() else None,
                 expires_at=arrival['expires_at'] if ready and arrival else None,
                 confirmed=bool(ready and arrival and arrival['used_by']),

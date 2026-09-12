@@ -298,7 +298,7 @@ def create_app(config=None):
         now = time.time()
         if action not in ('entry', 'exit', 'close'):
             raise ValueError('Lệnh điều khiển phải là mở cổng vào, mở cổng ra hoặc đóng thanh chắn.')
-        if action == 'entry' and not verified:
+        if (action == 'entry' or (action == 'exit' and source == 'device')) and not verified:
             return 'Người gửi xe cần quét QR tại cổng và đăng nhập để xác nhận vào bãi.'
         if not online(s):
             return 'ESP32 mất kết nối; không thể điều khiển từ xa.'
@@ -350,7 +350,7 @@ def create_app(config=None):
     def kiosk_guard(fn):
         @wraps(fn)
         def wrapped(*args, **kwargs):
-            if not session.get('kiosk'):
+            if not (session.get('kiosk') or session.get('authenticated')):
                 return jsonify(error='Vui lòng kết nối máy tính bảng với bãi xe.'), 401
             if request.method != 'GET' and not hmac.compare_digest(request.headers.get('X-CSRF-Token', ''), session.get('csrf', '!')):
                 return jsonify(error='Phiên không hợp lệ.'), 403
@@ -360,53 +360,61 @@ def create_app(config=None):
     @app.get('/api/kiosk/status')
     @kiosk_guard
     def kiosk_state():
+        direction = request.args.get("direction", "entry")
+        if direction not in ("entry", "exit"): raise ValueError("Hướng cổng không hợp lệ.")
         with lock, DB.begin() as db:
             _, s = read_state(db)
-            return jsonify(**kiosk_status(s, online(s)), csrf=session['csrf'])
+            return jsonify(**kiosk_status(s, online(s), direction), csrf=session['csrf'])
 
     @app.post('/api/kiosk/arrival')
     @kiosk_guard
     def simulate_arrival():
-        present = body().get('present')
+        data = body()
+        direction = data.get('direction', 'entry')
+        if direction not in ('entry', 'exit'): raise ValueError('Hướng cổng không hợp lệ.')
+        present = data.get('present')
         if type(present) is not bool:
             raise ValueError('Trạng thái xe đến không hợp lệ.')
         with lock, DB.begin() as db:
             row, s = read_state(db)
             if s['mode'] != 'simulation':
                 return jsonify(error='Chỉ cảm biến ESP32 được báo xe đến trong chế độ phần cứng.'), 409
-            arrival_update(s, present)
+            arrival_update(s, present, direction)
             save(row, s)
-            return jsonify(kiosk_status(s, online(s)))
+            return jsonify(kiosk_status(s, online(s), direction))
 
     @app.post('/api/kiosk/refresh')
     @kiosk_guard
     def refresh_arrival():
+        direction = body().get("direction", "entry")
+        if direction not in ("entry", "exit"): raise ValueError("Hướng cổng không hợp lệ.")
         with lock, DB.begin() as db:
             row, s = read_state(db)
-            arrival = s.get('arrival')
-            if not online(s) or not s.get('entry_present') or not arrival or arrival['used_by']:
+            arrival = s.get('arrival' if direction == 'entry' else 'departure')
+            if not online(s) or not s.get(direction + '_present') or not arrival or arrival['used_by']:
                 return jsonify(error='Không có lượt xe đang chờ xác nhận.'), 409
             if arrival['expires_at'] <= time.time():
-                s['entry_present'] = False
-                arrival_update(s, True)
+                s[direction + '_present'] = False
+                arrival_update(s, True, direction)
                 save(row, s)
-            return jsonify(kiosk_status(s, online(s)))
+            return jsonify(kiosk_status(s, online(s), direction))
 
     def confirm_entry(data, driver_id):
+        direction = "exit" if request.path.endswith("/exit") else "entry"
         token = data.get('token')
         if not isinstance(token, str) or len(token) != 48 or any(c not in '0123456789abcdef' for c in token):
             return jsonify(error='Mã QR không hợp lệ. Vui lòng quét mã tại cổng.'), 400
         with lock, DB.begin() as db:
             row, s = read_state(db)
-            arrival = s.get('arrival')
-            if not online(s) or not s.get('entry_present') or not arrival or arrival['used_by'] or arrival['expires_at'] <= time.time() or not hmac.compare_digest(token, arrival['token']):
+            arrival = s.get('arrival' if direction == 'entry' else 'departure')
+            if not online(s) or not s.get(direction + '_present') or not arrival or arrival['used_by'] or arrival['expires_at'] <= time.time() or not hmac.compare_digest(token, arrival['token']):
                 return jsonify(error='Mã QR đã hết hạn, đã dùng hoặc xe đã rời cổng. Vui lòng quét lại.'), 409
             if not db.get(Driver, driver_id):
                 return jsonify(error='Vui lòng đăng nhập tài khoản người gửi xe.'), 401
-            error = gate_request(db, s, 'entry', 'admin', verified=True)
+            error = gate_request(db, s, direction, 'admin', verified=True)
             if not error:
                 arrival['used_by'] = driver_id
-                event(db, 'gate', f'Tài khoản #{driver_id} xác nhận vào bãi bằng QR.', 'admin')
+                event(db, 'gate', f'Tài khoản #{driver_id} xác nhận {direction} bằng QR.', 'admin')
             save(row, s)
             if error:
                 return jsonify(error=error), 409
@@ -424,7 +432,7 @@ def create_app(config=None):
             raise ValueError('Số thứ tự gói tin hoặc mã phiên khởi động không hợp lệ.')
         if data.get('barrier') not in ('open', 'closed') or type(data.get('beam')) is not bool:
             raise ValueError('Cần trạng thái thanh chắn và cảm biến vật cản hợp lệ.')
-        if type(data.get('entry_present', False)) is not bool:
+        if any(type(data.get(k, False)) is not bool for k in ('entry_present', 'exit_present')):
             raise ValueError('Trạng thái cảm biến xe đến không hợp lệ.')
         with lock, DB.begin() as db:
             row, s = read_state(db)
@@ -435,7 +443,9 @@ def create_app(config=None):
             change_slots(db, s, slots, 'device')
             if not online(s) or s['boot_id'] != boot:
                 arrival_update(s, False)
+                arrival_update(s, False, "exit")
             arrival_update(s, data.get('entry_present', False))
+            arrival_update(s, data.get('exit_present', False), 'exit')
             s.update(last_seen=time.time(), boot_id=boot, sequence=seq, barrier=data['barrier'], beam=data['beam'])
             command = s['command']
             if command and (data.get('ack') == command['id'] or command['expires_at'] < time.time()):

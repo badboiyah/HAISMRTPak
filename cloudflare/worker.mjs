@@ -34,15 +34,16 @@ async function passwordValid(password, saved, pepper) {
 }
 export const initial = mode => ({mode, slots: Object.fromEntries(slots.map(s => [s, mode === 'simulation' ? false : null])),
   updated_at: null, last_seen: null, boot_id: null, sequence: -1, barrier: 'closed', beam: false, command: null, pending_until: 0, entry_present: false, arrival: null});
-function arrivalUpdate(s, present) {
-  if (present && !s.entry_present) s.arrival = {token: token().slice(0,48), expires_at: now()+120, used_by: null};
-  if (!present) s.arrival = null;
-  s.entry_present = present;
+function arrivalUpdate(s, present, direction='entry') {
+  const key=direction==='entry'?'arrival':'departure',pk=direction+'_present';
+  if(present&&!s[pk])s[key]={token:token().slice(0,48),expires_at:now()+120,used_by:null};
+  if(!present)s[key]=null;
+  s[pk]=present;
 }
-function kioskStatus(s) {
-  const ready = online(s) && s.entry_present, a = s.arrival;
-  return {mode:s.mode,online:online(s),present:Boolean(ready),token:ready&&a&&!a.used_by&&a.expires_at>now()?a.token:null,
-    expires_at:ready&&a?a.expires_at:null,confirmed:Boolean(ready&&a&&a.used_by),barrier:online(s)?s.barrier:'unknown',server_time:now()};
+function kioskStatus(s,direction='entry') {
+  const ready=online(s)&&s[direction+'_present'],a=s[direction==='entry'?'arrival':'departure'];
+  return {direction,mode:s.mode,online:online(s),present:Boolean(ready),token:ready&&a&&!a.used_by&&a.expires_at>now()?a.token:null,
+  expires_at:ready&&a?a.expires_at:null,confirmed:Boolean(ready&&a&&a.used_by),barrier:online(s)?s.barrier:'unknown',server_time:now()};
 }
 const online = s => s.mode === 'simulation' || Boolean(s.last_seen && now() - s.last_seen < 15);
 export function publicState(s) {
@@ -91,7 +92,7 @@ export async function mutate(db, fn) {
 }
 function gate(writes, db, s, action, source, verified = false) {
   if (!['entry', 'exit', 'close'].includes(action)) reject(400, 'Lệnh điều khiển cổng không hợp lệ.');
-  if (action === 'entry' && !verified) return 'Người gửi xe cần quét QR tại cổng và đăng nhập để xác nhận vào bãi.';
+  if ((action === 'entry' || (action === 'exit' && source === 'device')) && !verified) return 'Người gửi xe cần quét QR tại cổng và đăng nhập để xác nhận vào bãi.';
   if (!online(s)) return 'ESP32 mất kết nối; không thể điều khiển từ xa.';
   if (s.command && s.command.expires_at > now()) return 'Có lệnh đang chờ ESP32 xác nhận.';
   if (action === 'entry') {
@@ -198,21 +199,24 @@ async function api(request, env) {
     return sessionResponse(request, db, session, 'kiosk');
   }
   if (path.startsWith('/api/kiosk/')) {
-    if (session?.role !== 'kiosk') reject(401, 'Vui lòng kết nối máy tính bảng với bãi xe.');
+    if (!['admin','kiosk'].includes(session?.role)) reject(401, 'Vui lòng kết nối máy tính bảng với bãi xe.');
+    const direction=(method==='GET'?url.searchParams.get('direction'):data?.direction)||'entry';
+    if(!['entry','exit'].includes(direction))reject(400,'Hướng cổng không hợp lệ.');
+    const key=direction==='entry'?'arrival':'departure',pk=direction+'_present';
     if (method === 'POST') await csrfGuard(request, session);
-    if (path === '/api/kiosk/status' && method === 'GET') return json({...kioskStatus(await state(db)),csrf:session.csrf});
+    if (path === '/api/kiosk/status' && method === 'GET') return json({...kioskStatus(await state(db),direction),csrf:session.csrf});
     if (path === '/api/kiosk/arrival' && method === 'POST') {
       if (typeof data.present !== 'boolean') reject(400, 'Trạng thái xe đến không hợp lệ.');
       return json(await mutate(db, s => {
         if (s.mode !== 'simulation') reject(409, 'Chỉ cảm biến ESP32 được báo xe đến trong chế độ phần cứng.');
-        arrivalUpdate(s, data.present);
-        return kioskStatus(s);
+        arrivalUpdate(s, data.present,direction);
+        return kioskStatus(s,direction);
       }));
     }
     if (path === '/api/kiosk/refresh' && method === 'POST') return json(await mutate(db, s => {
-      if (!online(s) || !s.entry_present || !s.arrival || s.arrival.used_by) reject(409, 'Không có lượt xe đang chờ xác nhận.');
-      if (s.arrival.expires_at <= now()) {s.entry_present=false;arrivalUpdate(s,true);}
-      return kioskStatus(s);
+      if (!online(s) || !s[pk] || !s[key] || s[key].used_by) reject(409, 'Không có lượt xe đang chờ xác nhận.');
+      if (s[key].expires_at <= now()) {s[pk]=false;arrivalUpdate(s,true,direction);}
+      return kioskStatus(s,direction);
     }));
     reject(404, 'Không tìm thấy chức năng.');
   }
@@ -273,17 +277,18 @@ async function api(request, env) {
     for (const key of ['slots', 'available', 'occupied', 'unknown', 'full', 'online', 'mode', 'updated_at', 'server_time']) visible[key] = s[key];
     return json({...visible, location: await location(db)});
   }
-  if (path === '/api/driver/entry' && method === 'POST') {
+  if (['/api/driver/entry','/api/driver/exit'].includes(path) && method === 'POST') {
     if (typeof data.token !== 'string' || !/^[a-f0-9]{48}$/.test(data.token)) reject(400, 'Mã QR không hợp lệ. Vui lòng quét mã tại cổng.');
+    const direction=path.endsWith('/exit')?'exit':'entry';
     const user = await query(db,'SELECT id FROM drivers WHERE id=?',session.driver_id).first();
     if (!user) reject(401, 'Vui lòng đăng nhập tài khoản người gửi xe.');
     const result = await mutate(db, (s,writes) => {
-      const a=s.arrival;
-      if (!online(s) || !s.entry_present || !a || a.used_by || a.expires_at<=now() || a.token!==data.token) reject(409, 'Mã QR đã hết hạn, đã dùng hoặc xe đã rời cổng. Vui lòng quét lại.');
-      const error=gate(writes,db,s,'entry','admin',true);
+      const a=s[direction==='entry'?'arrival':'departure'];
+      if (!online(s) || !s[direction+'_present'] || !a || a.used_by || a.expires_at<=now() || a.token!==data.token) reject(409, 'Mã QR đã hết hạn, đã dùng hoặc xe đã rời cổng. Vui lòng quét lại.');
+      const error=gate(writes,db,s,direction,'admin',true);
       if (error) return {error};
       a.used_by=user.id;
-      event(writes,db,'gate',`Tài khoản #${user.id} xác nhận vào bãi bằng QR.`,'admin');
+      event(writes,db,'gate',`Tài khoản #${user.id} xác nhận ${direction} bằng QR.`,'admin');
       return {ok:true,mode:s.mode,message:s.mode==='simulation'?'Đã mở thanh chắn mô phỏng.':'Đã xác nhận. Đang chờ ESP32 mở thanh chắn.'};
     });
     return json(result,result.error?409:200);
@@ -321,13 +326,14 @@ async function api(request, env) {
     if (!data.slots || typeof data.slots !== 'object' || Object.keys(data.slots).length !== 4 || !slots.every(k => Object.hasOwn(data.slots, k) && [true, false, null].includes(data.slots[k]))) reject(400, 'Dữ liệu phải chứa đủ A1–A4 với trạng thái hợp lệ.');
     if (!Number.isSafeInteger(data.sequence) || data.sequence < 0 || typeof data.boot_id !== 'string' || data.boot_id.length < 1 || data.boot_id.length > 64) reject(400, 'Số thứ tự gói tin hoặc mã phiên khởi động không hợp lệ.');
     if (!['open', 'closed'].includes(data.barrier) || typeof data.beam !== 'boolean') reject(400, 'Cần trạng thái thanh chắn và cảm biến vật cản hợp lệ.');
-    if (data.entry_present !== undefined && typeof data.entry_present !== 'boolean') reject(400, 'Trạng thái cảm biến xe đến không hợp lệ.');
+    if (['entry_present','exit_present'].some(k => data[k] !== undefined && typeof data[k] !== 'boolean')) reject(400, 'Trạng thái cảm biến xe đến không hợp lệ.');
     return json(await mutate(db, (s, writes) => {
       if (s.mode !== 'hardware') reject(409, 'Máy chủ đang ở chế độ mô phỏng.');
       if (s.boot_id === data.boot_id && data.sequence <= s.sequence) reject(409, 'Gói tin trùng hoặc sai thứ tự.');
       changeSlots(writes, db, s, data.slots, 'device');
-      if (!online(s) || s.boot_id!==data.boot_id) arrivalUpdate(s,false);
+      if (!online(s) || s.boot_id!==data.boot_id) {arrivalUpdate(s,false);arrivalUpdate(s,false,'exit');}
       arrivalUpdate(s,data.entry_present ?? false);
+      arrivalUpdate(s,data.exit_present ?? false,'exit');
       Object.assign(s, {last_seen: now(), boot_id: data.boot_id, sequence: data.sequence, barrier: data.barrier, beam: data.beam});
       if (s.command && (data.ack === s.command.id || s.command.expires_at < now())) {
         const ack = data.ack === s.command.id;

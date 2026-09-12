@@ -30,6 +30,15 @@ class EntryTests(unittest.TestCase):
     def confirm(self,token):
         return self.driver.post('/api/driver/entry',json={'token':token},headers={'X-CSRF-Token':'driver-csrf'})
 
+    def test_admin_reuses_session_and_exit_qr_is_separate(self):
+        self.assertEqual(self.admin.get('/api/kiosk/status').status_code,200)
+        self.assertEqual(self.admin.get('/api/state').status_code,200)
+        token=self.kiosk.post('/api/kiosk/arrival',json={'present':True,'direction':'exit'},headers={'X-CSRF-Token':self.kcsrf}).json['token']
+        self.assertEqual(self.confirm(token).status_code,409)
+        self.assertEqual(self.app.test_client().post('/api/driver/exit',json={'token':token}).status_code,401)
+        self.assertEqual(self.driver.post('/api/driver/exit',json={'token':token},headers={'X-CSRF-Token':'driver-csrf'}).status_code,200)
+        self.assertEqual(self.driver.post('/api/driver/exit',json={'token':token},headers={'X-CSRF-Token':'driver-csrf'}).status_code,409)
+
     def test_pairing_is_limited_and_no_entry_bypass(self):
         for route in ('state','events','location'):
             self.assertEqual(self.kiosk.get('/api/'+route).status_code,401)

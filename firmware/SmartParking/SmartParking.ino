@@ -92,6 +92,7 @@ void telemetry() {
   for(int i=0;i<4;i++){ if(stable[i]<0) data["slots"][SLOT_NAMES[i]]=nullptr;else data["slots"][SLOT_NAMES[i]]=stable[i]==1; }
   data["barrier"]=gateOpen?"open":"closed";data["beam"]=beamBlocked();
   data["entry_present"]=lastEntry;
+  data["exit_present"]=lastExit;
   if(acknowledged.length()) data["ack"]=acknowledged;
   if(post("/api/device/telemetry",data,result)) applyCommand(result["command"],result["server_time"].as<double>());
 }
@@ -129,6 +130,6 @@ void loop() {
   if(millis()-lastSample>=250){lastSample=millis();sampleSlots();updateDisplay();}
   if(WiFi.status()!=WL_CONNECTED && millis()-lastWifi>=10000){lastWifi=millis();WiFi.reconnect();}
   if(millis()-lastSend>=2000){lastSend=millis();telemetry();}
-  if(debouncedRequest(EXIT_IR,exitSince,lastExit)) requestGate("exit");
+  debouncedRequest(EXIT_IR,exitSince,lastExit);
   delay(5);
 }

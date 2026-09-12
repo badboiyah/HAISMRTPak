@@ -158,6 +158,7 @@ def register_customer(app, DB, lock, State, Driver, Location, public, admin_guar
         session.clear()
         return jsonify(ok=True)
 
+    @app.post('/api/driver/exit')
     @app.post('/api/driver/entry')
     @driver_guard
     def driver_entry():

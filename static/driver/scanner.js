@@ -9,16 +9,17 @@
   if(video.readyState>=2&&video.videoWidth){
    canvas.width=Math.min(video.videoWidth,640);canvas.height=Math.round(video.videoHeight*canvas.width/video.videoWidth);ctx.drawImage(video,0,0,canvas.width,canvas.height);
    const pixels=ctx.getImageData(0,0,canvas.width,canvas.height),code=jsQR(pixels.data,canvas.width,canvas.height);
-   if(code){try{const url=new URL(code.data);const token=new URLSearchParams(url.hash.slice(1)).get('entry');if(url.origin!==location.origin||url.pathname!='/driver/'||!/^[a-f0-9]{48}$/.test(token||''))throw Error();stop();location.assign('/driver/#entry='+token);return;}catch{status.textContent='Mã này không phải mã vào bãi. Hãy quét mã trên máy tính bảng tại cổng.';}}
+   if(code){try{const url=new URL(code.data);const params=new URLSearchParams(url.hash.slice(1)),direction=params.has('exit')?'exit':'entry',token=params.get(direction);if(url.origin!==location.origin||url.pathname!='/driver/'||!/^[a-f0-9]{48}$/.test(token||''))throw Error();stop();location.assign('/driver/#'+direction+'='+token);return;}catch{status.textContent='Mã này không phải mã vào bãi. Hãy quét mã trên máy tính bảng tại cổng.';}}
   }
   timer=setTimeout(decode,180);
  }
  start.onclick=async()=>{
-  if(running)return;running=true;start.disabled=true;status.textContent='Đang mở camera…';
+  if(!user){status.textContent='Vui lòng đăng nhập để quét QR.';return;}if(running)return;running=true;start.disabled=true;status.textContent='Đang mở camera…';
   try{if(!navigator.mediaDevices?.getUserMedia)throw Error();const media=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});if(!running){media.getTracks().forEach(t=>t.stop());return;}stream=media;video.srcObject=stream;box.hidden=false;await video.play();status.textContent='Đưa mã QR tại cổng vào khung camera.';decode();}
   catch{stop();status.textContent='Không mở được camera. Hãy cấp quyền camera cho ứng dụng hoặc dùng camera điện thoại quét mã QR tại cổng.';}
  };
  document.querySelector('#stop-scan').onclick=stop;
  window.addEventListener('pagehide',stop);
+ window.addEventListener('driver-session-change',()=>{if(!user)stop();});
  document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
 })();
