@@ -363,8 +363,10 @@ def create_app(config=None):
         direction = request.args.get("direction", "entry")
         if direction not in ("entry", "exit"): raise ValueError("Hướng cổng không hợp lệ.")
         with lock, DB.begin() as db:
-            _, s = read_state(db)
-            return jsonify(**kiosk_status(s, online(s), direction), csrf=session['csrf'])
+            row, s = read_state(db)
+            status = kiosk_status(s, online(s), direction)
+            save(row, s)
+            return jsonify(**status, csrf=session['csrf'])
 
     @app.post('/api/kiosk/arrival')
     @kiosk_guard
@@ -414,6 +416,7 @@ def create_app(config=None):
             error = gate_request(db, s, direction, 'admin', verified=True)
             if not error:
                 arrival['used_by'] = driver_id
+                arrival['confirmed_at'] = time.time()
                 event(db, 'gate', f'Tài khoản #{driver_id} xác nhận {direction} bằng QR.', 'admin')
             save(row, s)
             if error:

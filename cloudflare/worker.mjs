@@ -52,7 +52,9 @@ function arrivalUpdate(s, present, direction='entry') {
   s[pk]=present;
 }
 function kioskStatus(s,direction='entry') {
-  const ready=online(s)&&s[direction+'_present'],a=s[direction==='entry'?'arrival':'departure'];
+  const key=direction==='entry'?'arrival':'departure',ready=online(s)&&s[direction+'_present'];
+  let a=s[key];
+  if(ready&&a?.used_by&&a.confirmed_at!=null&&now()>=a.confirmed_at+5){s[direction+'_present']=false;arrivalUpdate(s,true,direction);a=s[key];}
   return {direction,mode:s.mode,online:online(s),present:Boolean(ready),token:ready&&a&&!a.used_by&&a.expires_at>now()?a.token:null,
   expires_at:ready&&a?a.expires_at:null,confirmed:Boolean(ready&&a&&a.used_by),barrier:online(s)?s.barrier:'unknown',server_time:now()};
 }
@@ -215,7 +217,7 @@ async function api(request, env) {
     if(!['entry','exit'].includes(direction))reject(400,'Hướng cổng không hợp lệ.');
     const key=direction==='entry'?'arrival':'departure',pk=direction+'_present';
     if (method === 'POST') await csrfGuard(request, session);
-    if (path === '/api/kiosk/status' && method === 'GET') return json({...kioskStatus(await state(db),direction),csrf:session.csrf});
+    if (path === '/api/kiosk/status' && method === 'GET') return json({...await mutate(db,s=>kioskStatus(s,direction)),csrf:session.csrf});
     if (path === '/api/kiosk/arrival' && method === 'POST') {
       if (typeof data.present !== 'boolean') reject(400, 'Trạng thái xe đến không hợp lệ.');
       return json(await mutate(db, s => {
@@ -299,6 +301,7 @@ async function api(request, env) {
       const error=gate(writes,db,s,direction,'admin',true);
       if (error) return {error};
       a.used_by=user.id;
+      a.confirmed_at=now();
       event(writes,db,'gate',`Tài khoản #${user.id} xác nhận ${direction} bằng QR.`,'admin');
       return {ok:true,mode:s.mode,message:s.mode==='simulation'?'Đã mở thanh chắn mô phỏng.':'Đã xác nhận. Đang chờ ESP32 mở thanh chắn.'};
     });

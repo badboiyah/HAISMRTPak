@@ -28,6 +28,10 @@ def kiosk_status(state, online, direction="entry"):
     present_key = direction + "_present"
     arrival = state.get(key)
     ready = online and state.get(present_key, False)
+    if ready and arrival and arrival.get('used_by') and arrival.get('confirmed_at') is not None and time.time() >= arrival['confirmed_at'] + 5:
+        state[present_key] = False
+        arrival_update(state, True, direction)
+        arrival = state[key]
     return dict(direction=direction, mode=state['mode'], online=online, present=bool(ready),
                 token=arrival['token'] if ready and arrival and not arrival['used_by'] and arrival['expires_at'] > time.time() else None,
                 expires_at=arrival['expires_at'] if ready and arrival else None,

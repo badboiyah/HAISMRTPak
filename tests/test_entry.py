@@ -30,6 +30,19 @@ class EntryTests(unittest.TestCase):
     def confirm(self,token):
         return self.driver.post('/api/driver/entry',json={'token':token},headers={'X-CSRF-Token':'driver-csrf'})
 
+    def test_qr_returns_five_seconds_after_confirmation(self):
+        from unittest.mock import patch
+        token=self.arrival().json['token']
+        self.assertEqual(self.confirm(token).status_code,200)
+        self.assertIsNone(self.kiosk.get('/api/kiosk/status').json['token'])
+        with patch('entry.time.time',return_value=time.time()+6):
+            status=self.kiosk.get('/api/kiosk/status').json
+            self.assertEqual(self.kiosk.get('/api/kiosk/status').json['token'],status['token'])
+        self.assertTrue(status['token'])
+        self.assertNotEqual(status['token'],token)
+        self.assertEqual(status['barrier'],'open')
+        self.assertEqual(self.confirm(token).status_code,409)
+
     def test_closed_barrier_renews_used_qr_once(self):
         token=self.arrival().json['token']
         self.assertEqual(self.confirm(token).status_code,200)
