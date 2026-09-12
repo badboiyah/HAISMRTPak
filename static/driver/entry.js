@@ -7,8 +7,17 @@
  if(!token)return;
  notice.hidden=false;
  if(!/^[a-f0-9]{48}$/.test(token)){notice.textContent='Mã QR không hợp lệ. Vui lòng quét lại mã trên máy tính bảng tại cổng.';return;}
- let done=false,pending=false;
+ const storageKey='qr-confirm:'+direction+':'+token;
+ let expires=Number(sessionStorage.getItem(storageKey));
+ if(!expires){expires=Date.now()+60000;sessionStorage.setItem(storageKey,String(expires));}
+ let done=false,pending=false,expired=false;
+ const countdown=document.createElement('p');countdown.id='entry-countdown';countdown.setAttribute('role','timer');button.before(countdown);
+ const rescan=document.createElement('button');rescan.type='button';rescan.className='secondary';rescan.textContent='Quét lại QR';rescan.hidden=true;result.after(rescan);
+ rescan.onclick=()=>{panel.hidden=true;document.querySelector('#scan-qr').click();};
+ panel.classList.add('confirmation-overlay');panel.setAttribute('role','dialog');panel.setAttribute('aria-label',direction==='exit'?'Xác nhận ra bãi':'Xác nhận vào bãi');
+ function tick(){if(done)return;const remaining=Math.max(0,Math.ceil((expires-Date.now())/1000));countdown.textContent='Thời gian xác nhận còn '+remaining+' giây';if(!remaining){expired=true;button.disabled=true;rescan.hidden=false;result.textContent='Đã hết 1 phút. Vui lòng quét lại QR để xác nhận.';}}
+ tick();const timer=setInterval(tick,250);
  function update(){notice.hidden=Boolean(user);panel.hidden=!user;}
  window.addEventListener('driver-session-change',update);update();
- button.onclick=async()=>{if(pending||done)return;pending=true;button.disabled=true;result.textContent='Đang kiểm tra tài khoản và chỗ trống…';try{const response=await api('/'+direction,{token});done=true;result.textContent='Đã xác nhận tài khoản. Vui lòng chờ thanh chắn mở trước khi di chuyển.';button.textContent=direction==='exit'?'Đã xác nhận ra bãi':'Đã xác nhận vào bãi';history.replaceState(null,'',location.pathname);await refresh();}catch(e){result.textContent=vietnameseError(e);}finally{pending=false;button.disabled=done;}};
+ button.onclick=async()=>{tick();if(pending||done||expired)return;pending=true;button.disabled=true;result.textContent='Đang kiểm tra tài khoản và chỗ trống…';try{await api('/'+direction,{token});done=true;clearInterval(timer);countdown.textContent='';result.textContent='Đã xác nhận tài khoản. Vui lòng chờ thanh chắn mở trước khi di chuyển.';button.textContent=direction==='exit'?'Đã xác nhận ra bãi':'Đã xác nhận vào bãi';rescan.textContent='Đóng';rescan.hidden=false;rescan.onclick=()=>{panel.hidden=true;};history.replaceState(null,'',location.pathname);await refresh();}catch(e){result.textContent=vietnameseError(e);}finally{pending=false;button.disabled=done||expired;}};
 })();

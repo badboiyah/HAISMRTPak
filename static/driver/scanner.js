@@ -9,7 +9,7 @@
   if(video.readyState>=2&&video.videoWidth){
    canvas.width=Math.min(video.videoWidth,640);canvas.height=Math.round(video.videoHeight*canvas.width/video.videoWidth);ctx.drawImage(video,0,0,canvas.width,canvas.height);
    const pixels=ctx.getImageData(0,0,canvas.width,canvas.height),code=jsQR(pixels.data,canvas.width,canvas.height);
-   if(code){try{const url=new URL(code.data);const params=new URLSearchParams(url.hash.slice(1)),direction=params.has('exit')?'exit':'entry',token=params.get(direction);if(url.origin!==location.origin||url.pathname!='/driver/'||!/^[a-f0-9]{48}$/.test(token||''))throw Error();stop();location.assign('/driver/#'+direction+'='+token);return;}catch{status.textContent='Mã này không phải mã vào bãi. Hãy quét mã trên máy tính bảng tại cổng.';}}
+   if(code){try{const url=new URL(code.data);const params=new URLSearchParams(url.hash.slice(1)),direction=params.has('exit')?'exit':'entry',token=params.get(direction);if(url.origin!==location.origin||url.pathname!='/driver/'||!/^[a-f0-9]{48}$/.test(token||''))throw Error();stop();sessionStorage.setItem('qr-confirm:'+direction+':'+token,String(Date.now()+60000));const target='/driver/#'+direction+'='+token;if(location.pathname+location.hash===target)location.reload();else location.assign(target);return;}catch{status.textContent='Mã này không phải mã vào bãi. Hãy quét mã trên máy tính bảng tại cổng.';}}
   }
   timer=setTimeout(decode,180);
  }
