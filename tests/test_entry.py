@@ -30,6 +30,19 @@ class EntryTests(unittest.TestCase):
     def confirm(self,token):
         return self.driver.post('/api/driver/entry',json={'token':token},headers={'X-CSRF-Token':'driver-csrf'})
 
+    def test_assigns_free_slot_and_skips_existing_assignment(self):
+        first=self.confirm(self.arrival().json['token'])
+        self.assertEqual(first.json['assigned_slot'],'A1')
+        with self.app.extensions['parking_db'].begin() as db:
+            row=db.get(State,1)
+            state=json.loads(row.payload)
+            state['barrier']='closed'
+            state['pending_until']=0
+            row.payload=json.dumps(state)
+        self.arrival(False)
+        second=self.confirm(self.arrival().json['token'])
+        self.assertEqual(second.json['assigned_slot'],'A2')
+
     def test_qr_returns_five_seconds_after_confirmation(self):
         from unittest.mock import patch
         token=self.arrival().json['token']

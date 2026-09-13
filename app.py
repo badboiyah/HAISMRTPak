@@ -413,15 +413,23 @@ def create_app(config=None):
                 return jsonify(error='Mã QR đã hết hạn, đã dùng hoặc xe đã rời cổng. Vui lòng quét lại.'), 409
             if not db.get(Driver, driver_id):
                 return jsonify(error='Vui lòng đăng nhập tài khoản người gửi xe.'), 401
+            assigned_slot = None
+            if direction == 'entry':
+                s['assignments'] = {k:v for k,v in s.get('assignments', {}).items() if v['expires_at'] > time.time() and s['slots'].get(k) is False}
+                assigned_slot = next((k for k in sorted(s['slots']) if s['slots'][k] is False and k not in s['assignments']), None)
+                if not assigned_slot:
+                    return jsonify(error='Không còn ô trống để xếp xe. Vui lòng chờ.'), 409
             error = gate_request(db, s, direction, 'admin', verified=True)
             if not error:
+                if assigned_slot:
+                    s['assignments'][assigned_slot] = dict(driver_id=driver_id, expires_at=time.time()+120)
                 arrival['used_by'] = driver_id
                 arrival['confirmed_at'] = time.time()
                 event(db, 'gate', f'Tài khoản #{driver_id} xác nhận {direction} bằng QR.', 'admin')
             save(row, s)
             if error:
                 return jsonify(error=error), 409
-            return jsonify(ok=True, mode=s['mode'], message='Đã mở thanh chắn mô phỏng.' if s['mode']=='simulation' else 'Đã xác nhận. Đang chờ ESP32 mở thanh chắn.')
+            return jsonify(ok=True, assigned_slot=assigned_slot, mode=s['mode'], message='Đã mở thanh chắn mô phỏng.' if s['mode']=='simulation' else 'Đã xác nhận. Đang chờ ESP32 mở thanh chắn.')
 
     @app.post('/api/device/telemetry')
     @device_guard

@@ -298,12 +298,19 @@ async function api(request, env) {
     const result = await mutate(db, (s,writes) => {
       const a=s[direction==='entry'?'arrival':'departure'];
       if (!online(s) || !s[direction+'_present'] || !a || a.used_by || a.expires_at<=now() || a.token!==data.token) reject(409, 'Mã QR đã hết hạn, đã dùng hoặc xe đã rời cổng. Vui lòng quét lại.');
+      let assigned_slot=null;
+      if(direction==='entry') {
+        s.assignments=Object.fromEntries(Object.entries(s.assignments||{}).filter(([k,v])=>v.expires_at>now()&&s.slots[k]===false));
+        assigned_slot=slots.find(k=>s.slots[k]===false&&!s.assignments[k]);
+        if(!assigned_slot)return {error:'Không còn ô trống để xếp xe. Vui lòng chờ.'};
+      }
       const error=gate(writes,db,s,direction,'admin',true);
       if (error) return {error};
+      if(assigned_slot)s.assignments[assigned_slot]={driver_id:user.id,expires_at:now()+120};
       a.used_by=user.id;
       a.confirmed_at=now();
       event(writes,db,'gate',`Tài khoản #${user.id} xác nhận ${direction} bằng QR.`,'admin');
-      return {ok:true,mode:s.mode,message:s.mode==='simulation'?'Đã mở thanh chắn mô phỏng.':'Đã xác nhận. Đang chờ ESP32 mở thanh chắn.'};
+      return {ok:true,assigned_slot,mode:s.mode,message:s.mode==='simulation'?'Đã mở thanh chắn mô phỏng.':'Đã xác nhận. Đang chờ ESP32 mở thanh chắn.'};
     });
     return json(result,result.error?409:200);
   }
