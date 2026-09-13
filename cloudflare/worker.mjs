@@ -64,7 +64,7 @@ function kioskStatus(s,direction='entry') {
 const online = s => s.mode === 'simulation' || Boolean(s.last_seen && now() - s.last_seen < 15);
 export function publicState(s) {
   const fresh = online(s), visible = Object.fromEntries(slots.map(k => [k, fresh ? s.slots[k] : null]));
-  const reserved=Object.entries(s.assignments||{}).filter(([k,v])=>fresh&&visible[k]===false&&v.expires_at>now()).map(([k])=>k);
+  const reserved=Object.entries(s.assignments||{}).filter(([k,v])=>fresh&&visible[k]===false&&(v.expires_at==null||v.expires_at>now())).map(([k])=>k);
   for(const k of reserved)visible[k]=true;
   const available = Object.values(visible).filter(x => x === false).length;
   const occupied = Object.values(visible).filter(x => x === true).length;
@@ -306,17 +306,17 @@ async function api(request, env) {
       if (!online(s) || !s[direction+'_present'] || !a || a.used_by || a.expires_at<=now() || a.token!==data.token) reject(409, 'Mã QR đã hết hạn, đã dùng hoặc xe đã rời cổng. Vui lòng quét lại.');
       let assigned_slot=null;
       if(direction==='entry') {
-        const existing=Object.entries(s.assignments||{}).find(([k,v])=>v.driver_id===user.id&&v.expires_at>now());
+        const existing=Object.entries(s.assignments||{}).find(([k,v])=>v.driver_id===user.id&&(v.expires_at==null||v.expires_at>now()));
         const previous=s.active_entries?.[user.id]||(existing?{slot:existing[0],expires_at:existing[1].expires_at}:null);
-        if(previous&&(previous.expires_at>now()||s.slots[previous.slot]===true))return {error:'Bạn đã có chỗ tại ô '+previous.slot+'. Không được xác nhận vào bãi lần nữa. Vui lòng quét QR cổng ra khi rời bãi.'};
-        s.assignments=Object.fromEntries(Object.entries(s.assignments||{}).filter(([k,v])=>v.expires_at>now()&&s.slots[k]===false));
+        if(previous&&(previous.expires_at==null||previous.expires_at>now()||s.slots[previous.slot]===true))return {error:'Bạn đã có chỗ tại ô '+previous.slot+'. Không được xác nhận vào bãi lần nữa. Vui lòng quét QR cổng ra khi rời bãi.'};
+        s.assignments=Object.fromEntries(Object.entries(s.assignments||{}).filter(([k,v])=>(v.expires_at==null||v.expires_at>now())&&s.slots[k]===false));
         assigned_slot=slots.find(k=>s.slots[k]===false&&!s.assignments[k]);
         if(!assigned_slot)return {error:'Không còn ô trống để xếp xe. Vui lòng chờ.'};
       }
       const error=gate(writes,db,s,direction,'admin',true);
       if (error) return {error};
-      if(assigned_slot)s.assignments[assigned_slot]={driver_id:user.id,expires_at:now()+600};
-      if(assigned_slot){s.active_entries??={};s.active_entries[user.id]={slot:assigned_slot,expires_at:now()+600};}
+      if(assigned_slot)s.assignments[assigned_slot]={driver_id:user.id,expires_at:null};
+      if(assigned_slot){s.active_entries??={};s.active_entries[user.id]={slot:assigned_slot,expires_at:null};}
       if(direction==='exit'&&s.active_entries?.[user.id]){delete s.assignments?.[s.active_entries[user.id].slot];delete s.active_entries[user.id];}
       if(s.mode==='simulation')s.auto_close_at=now()+8;
       a.used_by=user.id;

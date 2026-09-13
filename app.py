@@ -144,7 +144,7 @@ def create_app(config=None):
     def public(s):
         fresh = online(s)
         slots = {k: v if fresh else None for k, v in s['slots'].items()}
-        reserved = [k for k,v in s.get('assignments', {}).items() if fresh and slots.get(k) is False and v['expires_at'] > time.time()]
+        reserved = [k for k,v in s.get('assignments', {}).items() if fresh and slots.get(k) is False and (v.get('expires_at') is None or v['expires_at'] > time.time())]
         for k in reserved:
             slots[k] = True
         available = sum(v is False for v in slots.values())
@@ -425,18 +425,18 @@ def create_app(config=None):
             if direction == 'entry':
                 previous = s.get('active_entries', {}).get(str(driver_id))
                 if not previous:
-                    previous = next((dict(slot=k, expires_at=v['expires_at']) for k,v in s.get('assignments', {}).items() if v['driver_id'] == driver_id and v['expires_at'] > time.time()), None)
-                if previous and (previous['expires_at'] > time.time() or s['slots'].get(previous['slot']) is True):
+                    previous = next((dict(slot=k, expires_at=v['expires_at']) for k,v in s.get('assignments', {}).items() if v['driver_id'] == driver_id and (v.get('expires_at') is None or v['expires_at'] > time.time())), None)
+                if previous and (previous.get('expires_at') is None or previous['expires_at'] > time.time() or s['slots'].get(previous['slot']) is True):
                     return jsonify(error='Bạn đã có chỗ tại ô '+previous['slot']+'. Không được xác nhận vào bãi lần nữa. Vui lòng quét QR cổng ra khi rời bãi.'), 409
-                s['assignments'] = {k:v for k,v in s.get('assignments', {}).items() if v['expires_at'] > time.time() and s['slots'].get(k) is False}
+                s['assignments'] = {k:v for k,v in s.get('assignments', {}).items() if (v.get('expires_at') is None or v['expires_at'] > time.time()) and s['slots'].get(k) is False}
                 assigned_slot = next((k for k in sorted(s['slots']) if s['slots'][k] is False and k not in s['assignments']), None)
                 if not assigned_slot:
                     return jsonify(error='Không còn ô trống để xếp xe. Vui lòng chờ.'), 409
             error = gate_request(db, s, direction, 'admin', verified=True)
             if not error:
                 if assigned_slot:
-                    s['assignments'][assigned_slot] = dict(driver_id=driver_id, expires_at=time.time()+600)
-                    s.setdefault('active_entries', {})[str(driver_id)] = dict(slot=assigned_slot, expires_at=time.time()+600)
+                    s['assignments'][assigned_slot] = dict(driver_id=driver_id, expires_at=None)
+                    s.setdefault('active_entries', {})[str(driver_id)] = dict(slot=assigned_slot, expires_at=None)
                 if direction == 'exit':
                     previous = s.get('active_entries', {}).pop(str(driver_id), None)
                     if previous:
