@@ -30,6 +30,20 @@ class EntryTests(unittest.TestCase):
     def confirm(self,token):
         return self.driver.post('/api/driver/entry',json={'token':token},headers={'X-CSRF-Token':'driver-csrf'})
 
+    def test_repeat_entry_rejected_and_obstruction_prevents_auto_close(self):
+        self.assertEqual(self.confirm(self.arrival().json['token']).status_code,200)
+        self.arrival(False)
+        response=self.confirm(self.arrival().json['token'])
+        self.assertEqual(response.status_code,409)
+        self.assertIn('Bạn đã có chỗ',response.json['error'])
+        from entry import settle_barrier
+        s={'mode':'simulation','barrier':'open','auto_close_at':time.time()-1,'beam':True}
+        settle_barrier(s)
+        self.assertEqual(s['barrier'],'open')
+        s['beam']=False
+        settle_barrier(s)
+        self.assertEqual(s['barrier'],'closed')
+
     def test_assigns_free_slot_and_skips_existing_assignment(self):
         first=self.confirm(self.arrival().json['token'])
         self.assertEqual(first.json['assigned_slot'],'A1')
@@ -37,6 +51,10 @@ class EntryTests(unittest.TestCase):
         self.assertTrue(view['slots']['A1'])
         self.assertIn('A1',view['reserved'])
         self.assertEqual(view['available'],3)
+        with self.app.extensions['parking_db'].begin() as db:
+            db.add(Driver(id=2,name='Second',email='second@example.com',username='second',password_hash='fixture',created_at=time.time()))
+        with self.driver.session_transaction() as session:
+            session['driver_id']=2
         with self.app.extensions['parking_db'].begin() as db:
             row=db.get(State,1)
             state=json.loads(row.payload)
@@ -57,7 +75,7 @@ class EntryTests(unittest.TestCase):
             self.assertEqual(self.kiosk.get('/api/kiosk/status').json['token'],status['token'])
         self.assertTrue(status['token'])
         self.assertNotEqual(status['token'],token)
-        self.assertEqual(status['barrier'],'open')
+        self.assertEqual(status['barrier'],'closed')
         self.assertEqual(self.confirm(token).status_code,409)
 
     def test_closed_barrier_renews_used_qr_once(self):

@@ -3,6 +3,12 @@ import secrets
 import time
 
 
+def settle_barrier(state):
+    if state['mode'] == 'simulation' and state['barrier'] == 'open' and state.get('auto_close_at') and time.time() >= state['auto_close_at'] and not state.get('beam'):
+        barrier_update(state, 'closed')
+        state['auto_close_at'] = None
+
+
 def barrier_update(state, barrier):
     if state['barrier'] == 'open' and barrier == 'closed':
         for direction, key in [('entry', 'arrival'), ('exit', 'departure')]:

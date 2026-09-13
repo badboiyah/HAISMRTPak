@@ -16,7 +16,7 @@ from flask import Flask, jsonify, request, session, send_from_directory
 from sqlalchemy import create_engine, inspect, text, String, Integer, Float, Boolean, Text, select, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from werkzeug.security import generate_password_hash, check_password_hash
-from entry import arrival_update, kiosk_status, barrier_update
+from entry import arrival_update, kiosk_status, barrier_update, settle_barrier
 
 ROOT = Path(__file__).resolve().parent
 SLOTS = ('A1', 'A2', 'A3', 'A4')
@@ -127,7 +127,10 @@ def create_app(config=None):
     def read_state(db):
         # Row lock also serializes writers in MySQL. SQLite is serialized by the process lock.
         row = db.execute(select(State).where(State.id == 1).with_for_update()).scalar_one()
-        return row, json.loads(row.payload)
+        state = json.loads(row.payload)
+        settle_barrier(state)
+        row.payload = json.dumps(state)
+        return row, state
 
     def save(row, state):
         row.payload = json.dumps(state)
@@ -420,6 +423,11 @@ def create_app(config=None):
                 return jsonify(error='Vui lòng đăng nhập tài khoản người gửi xe.'), 401
             assigned_slot = None
             if direction == 'entry':
+                previous = s.get('active_entries', {}).get(str(driver_id))
+                if not previous:
+                    previous = next((dict(slot=k, expires_at=v['expires_at']) for k,v in s.get('assignments', {}).items() if v['driver_id'] == driver_id and v['expires_at'] > time.time()), None)
+                if previous and (previous['expires_at'] > time.time() or s['slots'].get(previous['slot']) is True):
+                    return jsonify(error='Bạn đã có chỗ tại ô '+previous['slot']+'. Không được xác nhận vào bãi lần nữa. Vui lòng quét QR cổng ra khi rời bãi.'), 409
                 s['assignments'] = {k:v for k,v in s.get('assignments', {}).items() if v['expires_at'] > time.time() and s['slots'].get(k) is False}
                 assigned_slot = next((k for k in sorted(s['slots']) if s['slots'][k] is False and k not in s['assignments']), None)
                 if not assigned_slot:
@@ -428,6 +436,13 @@ def create_app(config=None):
             if not error:
                 if assigned_slot:
                     s['assignments'][assigned_slot] = dict(driver_id=driver_id, expires_at=time.time()+600)
+                    s.setdefault('active_entries', {})[str(driver_id)] = dict(slot=assigned_slot, expires_at=time.time()+600)
+                if direction == 'exit':
+                    previous = s.get('active_entries', {}).pop(str(driver_id), None)
+                    if previous:
+                        s.get('assignments', {}).pop(previous['slot'], None)
+                if s['mode'] == 'simulation':
+                    s['auto_close_at'] = time.time()+5
                 arrival['used_by'] = driver_id
                 arrival['confirmed_at'] = time.time()
                 event(db, 'gate', f'Tài khoản #{driver_id} xác nhận {direction} bằng QR.', 'admin')

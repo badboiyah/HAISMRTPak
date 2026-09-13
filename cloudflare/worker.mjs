@@ -34,6 +34,9 @@ async function passwordValid(password, saved, pepper) {
 }
 export const initial = mode => ({mode, slots: Object.fromEntries(slots.map(s => [s, mode === 'simulation' ? false : null])),
   updated_at: null, last_seen: null, boot_id: null, sequence: -1, barrier: 'closed', beam: false, command: null, pending_until: 0, entry_present: false, arrival: null});
+function settleBarrier(s) {
+  if(s.mode==='simulation'&&s.barrier==='open'&&s.auto_close_at&&now()>=s.auto_close_at&&!s.beam){barrierUpdate(s,'closed');s.auto_close_at=null;}
+}
 function barrierUpdate(s, barrier) {
   if(s.barrier==='open'&&barrier==='closed') {
     for(const [direction,key] of [['entry','arrival'],['exit','departure']]) {
@@ -67,7 +70,7 @@ export function publicState(s) {
   const occupied = Object.values(visible).filter(x => x === true).length;
   return {...s, slots: visible, reserved, online: fresh, available, occupied, unknown: 4 - available - occupied, full: occupied === 4, server_time: now()};
 }
-async function state(db) { return JSON.parse((await query(db, 'SELECT payload FROM parking_state WHERE id=1').first()).payload); }
+async function state(db) { const s=JSON.parse((await query(db, 'SELECT payload FROM parking_state WHERE id=1').first()).payload);settleBarrier(s);return s; }
 function event(writes, db, kind, message, source, slot = '') {
   writes.push(query(db, 'INSERT INTO events(timestamp,kind,slot,source,message) VALUES(?,?,?,?,?)', now(), kind, slot, source, message));
 }
@@ -91,7 +94,7 @@ function changeSlots(writes, db, s, changes, source) {
 export async function mutate(db, fn) {
   for (let attempt = 0; attempt < 8; attempt++) {
     const row = await query(db, 'SELECT payload,version FROM parking_state WHERE id=1').first();
-    const s = JSON.parse(row.payload), writes = [], result = fn(s, writes), guard = token();
+    const s = JSON.parse(row.payload), writes = [];settleBarrier(s);const result = fn(s, writes), guard = token();
     try {
       await db.batch([
         query(db, 'INSERT INTO write_guard(id,valid) VALUES(?,CASE WHEN (SELECT version FROM parking_state WHERE id=1)=? THEN 1 ELSE 0 END)', guard, row.version),
@@ -303,6 +306,9 @@ async function api(request, env) {
       if (!online(s) || !s[direction+'_present'] || !a || a.used_by || a.expires_at<=now() || a.token!==data.token) reject(409, 'Mã QR đã hết hạn, đã dùng hoặc xe đã rời cổng. Vui lòng quét lại.');
       let assigned_slot=null;
       if(direction==='entry') {
+        const existing=Object.entries(s.assignments||{}).find(([k,v])=>v.driver_id===user.id&&v.expires_at>now());
+        const previous=s.active_entries?.[user.id]||(existing?{slot:existing[0],expires_at:existing[1].expires_at}:null);
+        if(previous&&(previous.expires_at>now()||s.slots[previous.slot]===true))return {error:'Bạn đã có chỗ tại ô '+previous.slot+'. Không được xác nhận vào bãi lần nữa. Vui lòng quét QR cổng ra khi rời bãi.'};
         s.assignments=Object.fromEntries(Object.entries(s.assignments||{}).filter(([k,v])=>v.expires_at>now()&&s.slots[k]===false));
         assigned_slot=slots.find(k=>s.slots[k]===false&&!s.assignments[k]);
         if(!assigned_slot)return {error:'Không còn ô trống để xếp xe. Vui lòng chờ.'};
@@ -310,6 +316,9 @@ async function api(request, env) {
       const error=gate(writes,db,s,direction,'admin',true);
       if (error) return {error};
       if(assigned_slot)s.assignments[assigned_slot]={driver_id:user.id,expires_at:now()+600};
+      if(assigned_slot){s.active_entries??={};s.active_entries[user.id]={slot:assigned_slot,expires_at:now()+600};}
+      if(direction==='exit'&&s.active_entries?.[user.id]){delete s.assignments?.[s.active_entries[user.id].slot];delete s.active_entries[user.id];}
+      if(s.mode==='simulation')s.auto_close_at=now()+5;
       a.used_by=user.id;
       a.confirmed_at=now();
       event(writes,db,'gate',`Tài khoản #${user.id} xác nhận ${direction} bằng QR.`,'admin');
