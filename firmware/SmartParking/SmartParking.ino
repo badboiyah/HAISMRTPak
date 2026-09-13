@@ -36,7 +36,7 @@ void safetyLoop() {
   if(beamBlocked()) clearSince=0;
   else {
     if(clearSince==0) clearSince=millis();
-    if(millis()-openedAt>=5000 && millis()-clearSince>=2000) closeGate();
+    if(millis()-openedAt>=15000 && millis()-clearSince>=2000) closeGate();
   }
 }
 float distanceCm(int index) {

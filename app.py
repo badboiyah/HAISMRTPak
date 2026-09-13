@@ -442,7 +442,7 @@ def create_app(config=None):
                     if previous:
                         s.get('assignments', {}).pop(previous['slot'], None)
                 if s['mode'] == 'simulation':
-                    s['auto_close_at'] = time.time()+5
+                    s['auto_close_at'] = time.time()+15
                 arrival['used_by'] = driver_id
                 arrival['confirmed_at'] = time.time()
                 driver = db.get(Driver, driver_id)

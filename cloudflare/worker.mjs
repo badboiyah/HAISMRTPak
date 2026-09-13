@@ -318,7 +318,7 @@ async function api(request, env) {
       if(assigned_slot)s.assignments[assigned_slot]={driver_id:user.id,expires_at:now()+600};
       if(assigned_slot){s.active_entries??={};s.active_entries[user.id]={slot:assigned_slot,expires_at:now()+600};}
       if(direction==='exit'&&s.active_entries?.[user.id]){delete s.assignments?.[s.active_entries[user.id].slot];delete s.active_entries[user.id];}
-      if(s.mode==='simulation')s.auto_close_at=now()+5;
+      if(s.mode==='simulation')s.auto_close_at=now()+15;
       a.used_by=user.id;
       a.confirmed_at=now();
       event(writes,db,'gate',`Tài khoản ${user.username||user.email} xác nhận ${direction==='entry'?'vào bãi':'ra bãi'} bằng QR.`,'admin');

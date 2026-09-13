@@ -73,9 +73,11 @@ class EntryTests(unittest.TestCase):
         with patch('entry.time.time',return_value=time.time()+6):
             status=self.kiosk.get('/api/kiosk/status').json
             self.assertEqual(self.kiosk.get('/api/kiosk/status').json['token'],status['token'])
+            self.assertEqual(status['barrier'],'open')
+        with patch('entry.time.time',return_value=time.time()+16):
+            self.assertEqual(self.kiosk.get('/api/kiosk/status').json['barrier'],'closed')
         self.assertTrue(status['token'])
         self.assertNotEqual(status['token'],token)
-        self.assertEqual(status['barrier'],'closed')
         self.assertEqual(self.confirm(token).status_code,409)
 
     def test_closed_barrier_renews_used_qr_once(self):
