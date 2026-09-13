@@ -74,7 +74,7 @@ class EntryTests(unittest.TestCase):
             status=self.kiosk.get('/api/kiosk/status').json
             self.assertEqual(self.kiosk.get('/api/kiosk/status').json['token'],status['token'])
             self.assertEqual(status['barrier'],'open')
-        with patch('entry.time.time',return_value=time.time()+16):
+        with patch('entry.time.time',return_value=time.time()+9):
             self.assertEqual(self.kiosk.get('/api/kiosk/status').json['barrier'],'closed')
         self.assertTrue(status['token'])
         self.assertNotEqual(status['token'],token)
