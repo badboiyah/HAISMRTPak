@@ -445,7 +445,10 @@ def create_app(config=None):
                     s['auto_close_at'] = time.time()+5
                 arrival['used_by'] = driver_id
                 arrival['confirmed_at'] = time.time()
-                event(db, 'gate', f'Tài khoản #{driver_id} xác nhận {direction} bằng QR.', 'admin')
+                driver = db.get(Driver, driver_id)
+                account_name = driver.username or driver.email
+                action_name = 'vào bãi' if direction == 'entry' else 'ra bãi'
+                event(db, 'gate', f'Tài khoản {account_name} xác nhận {action_name} bằng QR.', 'admin')
             save(row, s)
             if error:
                 return jsonify(error=error), 409
@@ -520,9 +523,19 @@ def create_app(config=None):
         with DB() as db:
             query = event_query()
             total = db.scalar(select(func.count()).select_from(query.subquery()))
-            items = [dict(id=e.id, timestamp=e.timestamp, kind=e.kind, slot=e.slot, source=e.source, message=vietnamese_event(e.message))
+            items = [dict(id=e.id, timestamp=e.timestamp, kind=e.kind, slot=e.slot, source=e.source, message=account_event(db, e.message))
                      for e in db.scalars(query.offset((page-1)*20).limit(20))]
         return jsonify(items=items, total=total, page=page, pages=max(1, (total+19)//20))
+
+    def account_event(db, message):
+        import re
+        match = re.fullmatch(r'Tài khoản #(\d+) xác nhận (entry|exit|vào bãi|ra bãi) bằng QR\.', message)
+        if match:
+            driver = db.get(Driver, int(match[1]))
+            if driver:
+                direction = 'vào bãi' if match[2] in ('entry', 'vào bãi') else 'ra bãi'
+                return f'Tài khoản {driver.username or driver.email} xác nhận {direction} bằng QR.'
+        return vietnamese_event(message)
 
     @app.get('/api/events/export')
     @guard

@@ -299,7 +299,7 @@ async function api(request, env) {
   if (['/api/driver/entry','/api/driver/exit'].includes(path) && method === 'POST') {
     if (typeof data.token !== 'string' || !/^[a-f0-9]{48}$/.test(data.token)) reject(400, 'Mã QR không hợp lệ. Vui lòng quét mã tại cổng.');
     const direction=path.endsWith('/exit')?'exit':'entry';
-    const user = await query(db,'SELECT id FROM drivers WHERE id=?',session.driver_id).first();
+    const user = await query(db,'SELECT id,username,email FROM drivers WHERE id=?',session.driver_id).first();
     if (!user) reject(401, 'Vui lòng đăng nhập tài khoản người gửi xe.');
     const result = await mutate(db, (s,writes) => {
       const a=s[direction==='entry'?'arrival':'departure'];
@@ -321,7 +321,7 @@ async function api(request, env) {
       if(s.mode==='simulation')s.auto_close_at=now()+5;
       a.used_by=user.id;
       a.confirmed_at=now();
-      event(writes,db,'gate',`Tài khoản #${user.id} xác nhận ${direction} bằng QR.`,'admin');
+      event(writes,db,'gate',`Tài khoản ${user.username||user.email} xác nhận ${direction==='entry'?'vào bãi':'ra bãi'} bằng QR.`,'admin');
       return {ok:true,assigned_slot,mode:s.mode,message:s.mode==='simulation'?'Đã mở thanh chắn mô phỏng.':'Đã xác nhận. Đang chờ ESP32 mở thanh chắn.'};
     });
     return json(result,result.error?409:200);
@@ -397,6 +397,10 @@ async function api(request, env) {
     const page = Math.max(1, Number(pageText));
     const [count, items] = await db.batch([query(db, 'SELECT COUNT(*) AS total FROM events' + where, ...args),query(db, 'SELECT * FROM events' + where + ' ORDER BY id DESC LIMIT 20 OFFSET ?', ...args, (page-1)*20)]);
     const total = count.results[0].total;
+    await Promise.all(items.results.map(async e=>{
+      const match=/^Tài khoản #(\d+) xác nhận (entry|exit|vào bãi|ra bãi) bằng QR\.$/.exec(e.message);
+      if(match){const driver=await query(db,'SELECT username,email FROM drivers WHERE id=?',Number(match[1])).first();if(driver)e.message=`Tài khoản ${driver.username||driver.email} xác nhận ${['entry','vào bãi'].includes(match[2])?'vào bãi':'ra bãi'} bằng QR.`;}
+    }));
     return json({items:items.results,total,page,pages:Math.max(1,Math.ceil(total/20))});
   }
   if (path === '/api/stats' && method === 'GET') {
