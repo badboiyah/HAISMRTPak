@@ -422,7 +422,7 @@ def create_app(config=None):
             error = gate_request(db, s, direction, 'admin', verified=True)
             if not error:
                 if assigned_slot:
-                    s['assignments'][assigned_slot] = dict(driver_id=driver_id, expires_at=time.time()+120)
+                    s['assignments'][assigned_slot] = dict(driver_id=driver_id, expires_at=time.time()+600)
                 arrival['used_by'] = driver_id
                 arrival['confirmed_at'] = time.time()
                 event(db, 'gate', f'Tài khoản #{driver_id} xác nhận {direction} bằng QR.', 'admin')

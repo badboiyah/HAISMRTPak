@@ -306,7 +306,7 @@ async function api(request, env) {
       }
       const error=gate(writes,db,s,direction,'admin',true);
       if (error) return {error};
-      if(assigned_slot)s.assignments[assigned_slot]={driver_id:user.id,expires_at:now()+120};
+      if(assigned_slot)s.assignments[assigned_slot]={driver_id:user.id,expires_at:now()+600};
       a.used_by=user.id;
       a.confirmed_at=now();
       event(writes,db,'gate',`Tài khoản #${user.id} xác nhận ${direction} bằng QR.`,'admin');
