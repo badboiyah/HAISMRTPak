@@ -141,15 +141,20 @@ def create_app(config=None):
     def public(s):
         fresh = online(s)
         slots = {k: v if fresh else None for k, v in s['slots'].items()}
+        reserved = [k for k,v in s.get('assignments', {}).items() if fresh and slots.get(k) is False and v['expires_at'] > time.time()]
+        for k in reserved:
+            slots[k] = True
         available = sum(v is False for v in slots.values())
         occupied = sum(v is True for v in slots.values())
-        return {**s, 'slots': slots, 'online': fresh, 'available': available,
+        return {**s, 'slots': slots, 'reserved': reserved, 'online': fresh, 'available': available,
                 'occupied': occupied, 'unknown': 4-available-occupied,
                 'server_time': time.time(), 'full': occupied == 4}
 
     def change_slots(db, s, slots, source):
         now = time.time()
         for name, occupied in slots.items():
+            if occupied is True:
+                s.get('assignments', {}).pop(name, None)
             old = s['slots'][name]
             if occupied == old:
                 continue

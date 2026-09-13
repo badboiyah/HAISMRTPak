@@ -33,6 +33,10 @@ class EntryTests(unittest.TestCase):
     def test_assigns_free_slot_and_skips_existing_assignment(self):
         first=self.confirm(self.arrival().json['token'])
         self.assertEqual(first.json['assigned_slot'],'A1')
+        view=self.driver.get('/api/driver/parking').json
+        self.assertTrue(view['slots']['A1'])
+        self.assertIn('A1',view['reserved'])
+        self.assertEqual(view['available'],3)
         with self.app.extensions['parking_db'].begin() as db:
             row=db.get(State,1)
             state=json.loads(row.payload)

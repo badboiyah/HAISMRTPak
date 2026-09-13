@@ -170,7 +170,7 @@ def register_customer(app, DB, lock, State, Driver, Location, public, admin_guar
         with lock, DB.begin() as db:
             s = public(json.loads(db.get(State, 1).payload))
             # Explicit allow-list: no device IDs, gate commands, visits or admin data.
-            visible = {k:s[k] for k in ('slots','available','occupied','unknown','full','online','mode','updated_at','server_time')}
+            visible = {k:s[k] for k in ('slots','reserved','available','occupied','unknown','full','online','mode','updated_at','server_time')}
             return jsonify(**visible, location=location_json(db))
 
     @app.get('/api/location')

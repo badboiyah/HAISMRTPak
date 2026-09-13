@@ -61,9 +61,11 @@ function kioskStatus(s,direction='entry') {
 const online = s => s.mode === 'simulation' || Boolean(s.last_seen && now() - s.last_seen < 15);
 export function publicState(s) {
   const fresh = online(s), visible = Object.fromEntries(slots.map(k => [k, fresh ? s.slots[k] : null]));
+  const reserved=Object.entries(s.assignments||{}).filter(([k,v])=>fresh&&visible[k]===false&&v.expires_at>now()).map(([k])=>k);
+  for(const k of reserved)visible[k]=true;
   const available = Object.values(visible).filter(x => x === false).length;
   const occupied = Object.values(visible).filter(x => x === true).length;
-  return {...s, slots: visible, online: fresh, available, occupied, unknown: 4 - available - occupied, full: occupied === 4, server_time: now()};
+  return {...s, slots: visible, reserved, online: fresh, available, occupied, unknown: 4 - available - occupied, full: occupied === 4, server_time: now()};
 }
 async function state(db) { return JSON.parse((await query(db, 'SELECT payload FROM parking_state WHERE id=1').first()).payload); }
 function event(writes, db, kind, message, source, slot = '') {
@@ -72,6 +74,7 @@ function event(writes, db, kind, message, source, slot = '') {
 function changeSlots(writes, db, s, changes, source) {
   const timestamp = now();
   for (const [slot, occupied] of Object.entries(changes)) {
+    if(occupied===true&&s.assignments)delete s.assignments[slot];
     if (occupied === s.slots[slot]) continue;
     if (occupied !== null) {
       event(writes, db, occupied ? 'occupied' : 'vacated', `${slot}: ${occupied ? 'có xe' : 'trống'}`, source, slot);
@@ -287,7 +290,7 @@ async function api(request, env) {
   if (path === '/api/state' && method === 'GET') return json(publicState(await state(db)));
   if (path === '/api/driver/parking' && method === 'GET') {
     const s = publicState(await state(db)), visible = {};
-    for (const key of ['slots', 'available', 'occupied', 'unknown', 'full', 'online', 'mode', 'updated_at', 'server_time']) visible[key] = s[key];
+    for (const key of ['slots', 'reserved', 'available', 'occupied', 'unknown', 'full', 'online', 'mode', 'updated_at', 'server_time']) visible[key] = s[key];
     return json({...visible, location: await location(db)});
   }
   if (['/api/driver/entry','/api/driver/exit'].includes(path) && method === 'POST') {
