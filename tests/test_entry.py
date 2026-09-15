@@ -41,6 +41,8 @@ class EntryTests(unittest.TestCase):
         self.assertFalse(result.json['slots']['A1'])
         self.assertNotIn('1',result.json['active_entries'])
         self.assertNotIn('A1',result.json['assignments'])
+        with self.app.extensions['parking_db']() as db:
+            self.assertIsNotNone(db.get(Driver,1))
         self.assertEqual(self.admin.post(route,json={'slot':'A1'},headers={'X-CSRF-Token':self.csrf}).status_code,409)
 
     def test_repeat_entry_rejected_and_obstruction_prevents_auto_close(self):
