@@ -330,6 +330,18 @@ async function api(request, env) {
     if (method === 'GET') return json(await location(db));
     await query(db, 'UPDATE parking_location SET payload=? WHERE id=1', JSON.stringify(cleanLocation(data))).run(); return json({ok: true});
   }
+  if (path === '/api/parking/release' && method === 'POST') {
+    if(!slots.includes(data.slot))reject(400,'Vị trí không hợp lệ.');
+    return json(await mutate(db,(s,writes)=>{
+      const assigned=s.assignments?.[data.slot],owners=Object.entries(s.active_entries||{}).filter(([k,v])=>v.slot===data.slot).map(([k])=>k);
+      if(!assigned&&!owners.length)reject(409,'Ô này không có tài khoản được xếp chỗ.');
+      if(s.assignments)delete s.assignments[data.slot];
+      for(const k of owners)delete s.active_entries[k];
+      if(s.mode==='simulation')changeSlots(writes,db,s,{[data.slot]:false},'admin');
+      event(writes,db,'gate',`Quản trị giải phóng chỗ đã xếp tại ${data.slot}.`,'admin',data.slot);
+      return publicState(s);
+    }));
+  }
   if (path === '/api/simulation' && method === 'POST') {
     if (!slots.includes(data.slot) || typeof data.occupied !== 'boolean') reject(400, 'Cần vị trí A1–A4 và trạng thái hợp lệ.');
     return json(await mutate(db, (s, writes) => {

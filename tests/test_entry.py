@@ -30,6 +30,19 @@ class EntryTests(unittest.TestCase):
     def confirm(self,token):
         return self.driver.post('/api/driver/entry',json={'token':token},headers={'X-CSRF-Token':'driver-csrf'})
 
+    def test_admin_can_release_assigned_slot(self):
+        self.assertEqual(self.confirm(self.arrival().json['token']).json['assigned_slot'],'A1')
+        route='/api/parking/release'
+        self.assertEqual(self.driver.post(route,json={'slot':'A1'}).status_code,401)
+        self.assertEqual(self.kiosk.post(route,json={'slot':'A1'}).status_code,401)
+        self.assertEqual(self.admin.post(route,json={'slot':'A1'}).status_code,403)
+        result=self.admin.post(route,json={'slot':'A1'},headers={'X-CSRF-Token':self.csrf})
+        self.assertEqual(result.status_code,200)
+        self.assertFalse(result.json['slots']['A1'])
+        self.assertNotIn('1',result.json['active_entries'])
+        self.assertNotIn('A1',result.json['assignments'])
+        self.assertEqual(self.admin.post(route,json={'slot':'A1'},headers={'X-CSRF-Token':self.csrf}).status_code,409)
+
     def test_repeat_entry_rejected_and_obstruction_prevents_auto_close(self):
         self.assertEqual(self.confirm(self.arrival().json['token']).status_code,200)
         self.arrival(False)

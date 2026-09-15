@@ -28,6 +28,10 @@ function renderState(s){
   $('#slots').innerHTML=Object.entries(s.slots).map(([name,value])=>`<button class="slot ${value===true?'occupied':value===null?'unknown':''}" data-slot="${name}" ${s.mode!=='simulation'?'disabled':''} aria-label="${name}: ${value===true?'có xe':value===null?'chưa xác định':'trống'}${s.mode==='simulation'?', nhấn để đổi trạng thái':''}"><span class="slot-label">${name}</span>${value===true?'<img class="slot-car" src="/static/brand/parked-car.svg" alt="Ô tô đang đỗ">':`<span class="parking-p">${value===null?'?':'P'}</span>`}<span class="slot-status">${value===true?((s.reserved||[]).includes(name)?'Đã có chỗ':'Đang có xe'):value===null?'Chưa xác định':'Còn trống'}</span></button>`).join('');
   $('#slots').querySelectorAll('button').forEach(b=>b.onclick=()=>mutate('/simulation',{slot:b.dataset.slot,occupied:s.slots[b.dataset.slot]!==true}));
   $('#updated-time').textContent=s.updated_at?'Cập nhật '+new Date(s.updated_at*1000).toLocaleTimeString('vi-VN'):'';
+  let releases=$('#release-spots');if(!releases){releases=document.createElement('div');releases.id='release-spots';$('#slots').after(releases);}
+  releases.replaceChildren();
+  const assignedSlots=[...new Set([...Object.keys(s.assignments||{}),...Object.values(s.active_entries||{}).map(v=>v.slot)])].sort();
+  for(const slot of assignedSlots){const button=document.createElement('button');button.className='secondary';button.textContent='Giải phóng chỗ '+slot;button.onclick=()=>{if(confirm('Giải phóng chỗ '+slot+' và xóa liên kết với tài khoản người gửi xe?'))mutate('/parking/release',{slot});};releases.append(button);}
   $('#map-note').textContent=s.mode==='simulation'?'Nhấn vào vị trí để cập nhật trạng thái':'Dữ liệu cảm biến · Chu kỳ 2 giây';
   const pending=s.command&&s.command.expires_at>s.server_time;
   $('#gate-state').textContent=!s.online?'Chưa xác định':pending?'Đang chờ thiết bị':s.barrier==='open'?'Thanh chắn đang mở':'Thanh chắn đang đóng';

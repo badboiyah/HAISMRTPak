@@ -516,6 +516,26 @@ def create_app(config=None):
             q = q.where(Event.timestamp >= start, Event.timestamp < start+86400)
         return q.order_by(Event.id.desc())
 
+    @app.post('/api/parking/release')
+    @guard
+    def release_parking():
+        slot = body().get('slot')
+        if slot not in SLOTS:
+            raise ValueError('Vị trí không hợp lệ.')
+        with lock, DB.begin() as db:
+            row, s = read_state(db)
+            assigned = s.get('assignments', {}).pop(slot, None)
+            owners = [k for k,v in s.get('active_entries', {}).items() if v['slot'] == slot]
+            if not assigned and not owners:
+                return jsonify(error='Ô này không có tài khoản được xếp chỗ.'), 409
+            for k in owners:
+                del s['active_entries'][k]
+            if s['mode'] == 'simulation':
+                change_slots(db, s, {slot: False}, 'admin')
+            event(db, 'gate', f'Quản trị giải phóng chỗ đã xếp tại {slot}.', 'admin', slot)
+            save(row, s)
+            return jsonify(public(s))
+
     @app.get('/api/events')
     @guard
     def events():
