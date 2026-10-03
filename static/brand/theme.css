@@ -129,6 +129,7 @@ h1 { font-weight: 800; letter-spacing: -1px; }
 .driver-theme .brand { position:relative; --driver-logo-width:180px; padding:19px 0; }
 .driver-theme .brand > a { display:block; width:var(--driver-logo-width); }
 .driver-theme .driver-motion-logo { display:block; width:var(--driver-logo-width); aspect-ratio:704 / 250; mix-blend-mode:screen; }
+.driver-theme .driver-motion-logo img { filter:contrast(1.5); }
 .driver-theme .driver-wordmark { position:absolute; left:0; bottom:19px; width:var(--driver-logo-width); height:auto; clip-path:inset(68% 0 0 0); }
 .driver-theme .driver-car-track { position:absolute; left:0; right:0; top:16px; height:calc(var(--driver-logo-width) * 170 / 704); overflow:hidden; }
 .driver-theme .driver-car-runner { position:absolute; display:block; width:var(--driver-logo-width); height:auto; clip-path:inset(0 0 34% 0); animation:driver-gif-roundtrip 10s linear infinite !important; }
