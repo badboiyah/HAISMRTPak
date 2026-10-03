@@ -130,10 +130,6 @@ h1 { font-weight: 800; letter-spacing: -1px; }
 .driver-theme .driver-motion-logo img { display:block; width:100%; height:auto; }
 .driver-theme .driver-motion-logo .driver-logo-still { display:none; }
 @media (max-width:600px) { .driver-theme .driver-motion-logo { width:160px; } }
-@media (prefers-reduced-motion:reduce) {
-  .driver-theme .driver-motion-logo .driver-logo-gif { display:none; }
-  .driver-theme .driver-motion-logo .driver-logo-still { display:block; }
-}
 .driver-theme .tag { color: #c1b779; font-size: 8px; }
 .driver-theme .welcome { background: radial-gradient(ellipse at bottom right, #38300b55, transparent 70%), #101010; border: 1px solid #443b16; border-radius: 8px; margin-top: 23px; padding: 23px 20px 12px; }
 .driver-theme .welcome .eyebrow { color: var(--yellow); }
