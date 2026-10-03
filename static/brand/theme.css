@@ -126,10 +126,17 @@ h1 { font-weight: 800; letter-spacing: -1px; }
 .driver-theme .phone { background: #0d0d0d; box-shadow: 0 0 80px #0008; border-inline: 1px solid #303030; }
 .driver-theme .brand { border-bottom: 1px solid #3b3418; padding: 19px 0; }
 .driver-theme .brand-lockup { width: 180px; }
-.driver-theme .driver-motion-logo { display:block; width:180px; mix-blend-mode:screen; }
-.driver-theme .driver-motion-logo img { display:block; width:100%; height:auto; }
-.driver-theme .driver-motion-logo .driver-logo-still { display:none; }
-@media (max-width:600px) { .driver-theme .driver-motion-logo { width:160px; } }
+.driver-theme .brand { position:relative; --driver-logo-width:180px; }
+.driver-theme .driver-motion-logo { display:block; width:var(--driver-logo-width); height:calc(var(--driver-logo-width) * 250 / 704); mix-blend-mode:screen; }
+.driver-theme .driver-wordmark { position:absolute; left:0; bottom:19px; width:var(--driver-logo-width); height:auto; clip-path:inset(68% 0 0 0); }
+.driver-theme .driver-car-track { position:absolute; left:0; right:0; top:16px; height:calc(var(--driver-logo-width) * 170 / 704); overflow:hidden; }
+.driver-theme .driver-car-runner { position:absolute; width:var(--driver-logo-width); height:auto; clip-path:inset(0 0 32% 0); animation:driver-full-track 5s linear infinite !important; }
+.driver-theme .brand .tag { align-self:flex-end; margin-bottom:2px; }
+@keyframes driver-full-track {
+  0%, 8% { left:0; transform:translateX(0); }
+  85%, 100% { left:100%; transform:translateX(-100%); }
+}
+@media (max-width:600px) { .driver-theme .brand { --driver-logo-width:160px; } }
 .driver-theme .tag { color: #c1b779; font-size: 8px; }
 .driver-theme .welcome { background: radial-gradient(ellipse at bottom right, #38300b55, transparent 70%), #101010; border: 1px solid #443b16; border-radius: 8px; margin-top: 23px; padding: 23px 20px 12px; }
 .driver-theme .welcome .eyebrow { color: var(--yellow); }
