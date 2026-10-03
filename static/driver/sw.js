@@ -1,4 +1,4 @@
-const CACHE='haismrtpak-driver-v15-no-hold-limit';
+const CACHE='haismrtpak-driver-v16-motion-logo';
 const SHELL=['/static/driver/scanner.js','/static/vendor/jsQR.js','/static/driver/entry.js','/static/entry.css','/static/brand/parked-car.svg','/driver/','/static/vi.js','/static/driver/style.css','/static/driver/app.js','/static/driver/icon-192.png','/static/driver/icon-512.png','/static/brand/theme.css','/static/brand/logo.png','/static/brand/car.png','/static/brand/app-icon.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>(key.startsWith('parksense-driver-')||key.startsWith('haismrtpak-driver-'))&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));});
